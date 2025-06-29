@@ -35,6 +35,9 @@ function addFixedPeriodsToGrid(grid: Schedule['schedule'], classLevel: 'Anaokulu
   });
 }
 
+// Tarayıcının arayüzü güncellemesine ve diğer işlemleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
+const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
+
 /**
  * Sistematik olarak, çakışmaları ve zaman kısıtlamalarını dikkate alarak ders programını oluşturur.
  * Bu versiyon, kilitlenmeleri önlemek için esnek bir "ders havuzu" ve "rastgele deneme" stratejisi kullanır.
@@ -190,7 +193,7 @@ export async function generateSystematicSchedule(
 
     // Her 50 denemede bir, tarayıcının diğer işleri yapmasına izin ver
     if (attempts % 50 === 0) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await yieldToMainThread();
     }
 
     const { mapping, blockLength } = task;
