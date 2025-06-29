@@ -1,8 +1,24 @@
 // --- START OF FILE src/utils/scheduleGeneration.ts (TAM VE EKSİKSİZ HALİ) ---
 
 import { DAYS, PERIODS, Schedule, Teacher, Class, Subject } from '../types';
-import { SubjectTeacherMapping, EnhancedGenerationResult, UnassignedLesson } from '../types/wizard';
+import { SubjectTeacherMapping, EnhancedGenerationResult, WizardData, UnassignedLesson } from '../types/wizard';
 import { TimeConstraint } from '../types/constraints';
+
+// Tarayıcının arayüzü güncellemesine ve diğer işlemleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
+const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
+
+// Yardımcı fonksiyon: Varlığın seviyesini döndürür
+function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ortaokul' {
+    return (entity as any).level || (entity as any).levels?.[0] || 'İlkokul';
+}
+
+// ScheduleSlot tipi tanımı
+interface ScheduleSlot {
+  subjectId?: string;
+  classId?: string;
+  teacherId?: string;
+  isFixed?: boolean;
+}
 
 /**
  * Belirli bir sınıf için TÜM sabit periyotları (Yemek, Hazırlık, Kahvaltılar vb.) program ızgarasına ekler.
@@ -35,9 +51,6 @@ function addFixedPeriodsToGrid(grid: Schedule['schedule'], classLevel: 'Anaokulu
   });
 }
 
-// Tarayıcının arayüzü güncellemesine ve diğer işlemleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
-const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
-
 /**
  * Sistematik olarak, çakışmaları ve zaman kısıtlamalarını dikkate alarak ders programını oluşturur.
  * Bu versiyon, kilitlenmeleri önlemek için esnek bir "ders havuzu" ve "rastgele deneme" stratejisi kullanır.
@@ -48,7 +61,7 @@ export async function generateSystematicSchedule(
   allClasses: Class[],
   allSubjects: Subject[],
   timeConstraints: TimeConstraint[],
-  globalRules: any
+  globalRules: WizardData['constraints']['globalRules']
 ): Promise<EnhancedGenerationResult> {
   
   const startTime = Date.now();
@@ -81,51 +94,16 @@ export async function generateSystematicSchedule(
         dailyLessonCount.get(classItem.id)!.set(day, new Map());
       });
       
-      // Seviyeye göre öğle yemeği periyodunu belirle
-      const lunchPeriod = getEntityLevel(classItem) === 'Ortaokul' ? '6' : '5';
+      // Sabit periyotları ekle
+      addFixedPeriodsToGrid(classScheduleGrids[classItem.id], getEntityLevel(classItem));
       
-      // Öğle yemeği periyodunu sabit olarak işaretle
-      if (PERIODS.includes(lunchPeriod)) {
-        DAYS.forEach(day => { 
-          classScheduleGrids[classItem.id][day][lunchPeriod] = { 
-            isFixed: true, 
-            classId: 'fixed-period', 
-            subjectId: 'fixed-lunch' 
-          }; 
-          classAvailability.get(classItem.id)!.add(`${day}-${lunchPeriod}`); 
-        });
-      }
-      
-      // Hazırlık periyodunu ekle
+      // Sabit periyotları kullanılabilirlik durumuna ekle
       DAYS.forEach(day => {
-        classScheduleGrids[classItem.id][day]['prep'] = {
-          isFixed: true,
-          classId: 'fixed-period',
-          subjectId: 'fixed-prep'
-        };
-        classAvailability.get(classItem.id)!.add(`${day}-prep`);
-      });
-      
-      // Ortaokul için kahvaltı periyodunu ekle
-      if (getEntityLevel(classItem) === 'Ortaokul') {
-        DAYS.forEach(day => {
-          classScheduleGrids[classItem.id][day]['breakfast'] = {
-            isFixed: true,
-            classId: 'fixed-period',
-            subjectId: 'fixed-breakfast'
-          };
-          classAvailability.get(classItem.id)!.add(`${day}-breakfast`);
+        Object.entries(classScheduleGrids[classItem.id][day]).forEach(([period, slot]) => {
+          if (slot && slot.isFixed) {
+            classAvailability.get(classItem.id)!.add(`${day}-${period}`);
+          }
         });
-      }
-      
-      // İkindi kahvaltısı periyodunu ekle
-      DAYS.forEach(day => {
-        classScheduleGrids[classItem.id][day]['afternoon-breakfast'] = {
-          isFixed: true,
-          classId: 'fixed-period',
-          subjectId: 'fixed-afternoon-breakfast'
-        };
-        classAvailability.get(classItem.id)!.add(`${day}-afternoon-breakfast`);
       });
     }
   });
@@ -139,6 +117,19 @@ export async function generateSystematicSchedule(
     timeConstraints.forEach(c => {
       if (c.entityType === 'teacher' && c.entityId === teacherId && c.constraintType === 'unavailable') {
         teacherAvailability.get(teacherId)!.add(`${c.day}-${c.period}`);
+      }
+    });
+    
+    // Sabit periyotları öğretmen kullanılabilirlik durumuna ekle
+    allClasses.forEach(classItem => {
+      if (selectedClassIds.has(classItem.id)) {
+        DAYS.forEach(day => {
+          Object.entries(classScheduleGrids[classItem.id][day]).forEach(([period, slot]) => {
+            if (slot && slot.isFixed) {
+              teacherAvailability.get(teacherId)!.add(`${day}-${period}`);
+            }
+          });
+        });
       }
     });
   });
@@ -261,6 +252,13 @@ export async function generateSystematicSchedule(
                 
                 placed = true;
                 task.isPlaced = true;
+                
+                // Orijinal mapping nesnesindeki atanan saat sayısını güncelle
+                const originalMapping = mappings.find(m => m.id === mapping.id);
+                if (originalMapping) {
+                    originalMapping.assignedHours += blockLength;
+                }
+                
                 break;
             }
         }
@@ -314,31 +312,27 @@ export async function generateSystematicSchedule(
 
   // Yerleştirilemeyen dersleri belirle
   const unassignedLessonsMap = new Map<string, UnassignedLesson>();
-  allTasks.filter(task => !task.isPlaced).forEach(task => {
-      const { mapping } = task;
+  
+  mappings.forEach(mapping => {
+    if (mapping.assignedHours < mapping.weeklyHours) {
       const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}`;
       const classItem = allClasses.find(c => c.id === mapping.classId);
       const subject = allSubjects.find(s => s.id === mapping.subjectId);
       const teacher = allTeachers.find(t => t.id === mapping.teacherId);
       
       if (classItem && subject && teacher) {
-          if (!unassignedLessonsMap.has(key)) {
-              unassignedLessonsMap.set(key, {
-                  classId: classItem.id, 
-                  className: classItem.name, 
-                  subjectId: subject.id,
-                  subjectName: subject.name, 
-                  teacherId: teacher.id, 
-                  teacherName: teacher.name,
-                  missingHours: 0, 
-                  totalHours: mapping.weeklyHours
-              });
-          }
-          const lesson = unassignedLessonsMap.get(key);
-          if(lesson) {
-            lesson.missingHours += task.blockLength;
-          }
+        unassignedLessonsMap.set(key, {
+          classId: classItem.id,
+          className: classItem.name,
+          subjectId: subject.id,
+          subjectName: subject.name,
+          teacherId: teacher.id,
+          teacherName: teacher.name,
+          missingHours: mapping.weeklyHours - mapping.assignedHours,
+          totalHours: mapping.weeklyHours
+        });
       }
+    }
   });
 
   const unassignedLessons = Array.from(unassignedLessonsMap.values());
@@ -357,18 +351,5 @@ export async function generateSystematicSchedule(
     warnings,
     errors: [],
   };
-}
-
-// Yardımcı fonksiyon: Varlığın seviyesini döndürür
-function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ortaokul' {
-    return (entity as any).level || (entity as any).levels?.[0] || 'İlkokul';
-}
-
-// ScheduleSlot tipi tanımı (eksik olduğu için eklendi)
-interface ScheduleSlot {
-  subjectId?: string;
-  classId?: string;
-  teacherId?: string;
-  isFixed?: boolean;
 }
 // --- END OF FILE src/utils/scheduleGeneration.ts ---
