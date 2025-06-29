@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Schedule, Teacher, Class, Subject, DAYS, getTimePeriods, formatTimeRange, PERIODS, ScheduleSlot, EDUCATION_LEVELS } from '../../types';
 import { stringToHslColor } from '../../utils/colorUtils';
-import { GraduationCap, Lock, ArrowUpDown as ArrowsUpDown, Info, Filter, Search, X } from 'lucide-react';
+import { GraduationCap, Lock, ArrowUpDown, Info, Filter, Search, X, Calendar, Users, BookOpen } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import Select from '../UI/Select';
 
@@ -27,6 +27,32 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
   const [draggingCell, setDraggingCell] = useState<CellData | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // İstatistikler
+  const stats = useMemo(() => {
+    const totalSlots = workingSchedules.reduce((total, schedule) => {
+      let count = 0;
+      Object.values(schedule.schedule).forEach(day => {
+        Object.values(day).forEach(slot => {
+          if (slot && !slot.isFixed) count++;
+        });
+      });
+      return total + count;
+    }, 0);
+    
+    const totalTeachers = new Set(workingSchedules.map(s => s.teacherId)).size;
+    const totalClasses = new Set(
+      workingSchedules.flatMap(s => 
+        Object.values(s.schedule).flatMap(day => 
+          Object.values(day)
+            .filter(slot => slot && !slot.isFixed)
+            .map(slot => slot?.classId)
+        )
+      )
+    ).size;
+    
+    return { totalSlots, totalTeachers, totalClasses };
+  }, [workingSchedules]);
 
   const groupedClasses = useMemo(() => {
     // Önce sınıfları filtrele
@@ -137,10 +163,50 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
   return (
     <div>
       <div className="p-5 bg-white border rounded-xl mb-6 shadow-sm">
-        <h3 className="font-semibold text-gray-800 text-lg mb-3">Okul Geneli Operasyon Masası</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Dersleri sürükleyip boş bir alana taşıyabilir veya başka bir dersle yerlerini değiştirebilirsiniz (takas).
-        </p>
+        <div className="flex items-center mb-3">
+          <div className="w-10 h-10 bg-ide-primary-100 rounded-lg flex items-center justify-center mr-3 shadow-sm border border-ide-primary-200">
+            <Calendar className="w-6 h-6 text-ide-primary-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-ide-primary-900 text-lg">Okul Geneli Operasyon Masası</h3>
+            <p className="text-sm text-ide-primary-700">
+              Dersleri sürükleyip boş bir alana taşıyabilir veya başka bir dersle yerlerini değiştirebilirsiniz.
+            </p>
+          </div>
+        </div>
+        
+        {/* İstatistikler */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="bg-ide-primary-50 rounded-lg p-3 border border-ide-primary-200 flex items-center">
+            <div className="w-10 h-10 rounded-full bg-ide-primary-100 flex items-center justify-center mr-3">
+              <Calendar className="w-5 h-5 text-ide-primary-600" />
+            </div>
+            <div>
+              <div className="text-xs text-ide-primary-700">Toplam Ders Saati</div>
+              <div className="text-lg font-bold text-ide-primary-900">{stats.totalSlots}</div>
+            </div>
+          </div>
+          
+          <div className="bg-ide-secondary-50 rounded-lg p-3 border border-ide-secondary-200 flex items-center">
+            <div className="w-10 h-10 rounded-full bg-ide-secondary-100 flex items-center justify-center mr-3">
+              <Users className="w-5 h-5 text-ide-secondary-600" />
+            </div>
+            <div>
+              <div className="text-xs text-ide-secondary-700">Aktif Öğretmen</div>
+              <div className="text-lg font-bold text-ide-secondary-900">{stats.totalTeachers}</div>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 flex items-center">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+              <BookOpen className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <div className="text-xs text-blue-700">Programlı Sınıf</div>
+              <div className="text-lg font-bold text-blue-900">{stats.totalClasses}</div>
+            </div>
+          </div>
+        </div>
         
         <div className="flex flex-col md:flex-row gap-4 mb-4">
           <div className="flex-1">
@@ -156,45 +222,45 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
           </div>
           
           <div className="flex-1">
-            <label className="block text-sm font-semibold text-gray-800 mb-2">
+            <label className="block text-sm font-semibold text-ide-gray-800 mb-2">
               Sınıf Ara
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+                <Search className="h-5 w-5 text-ide-gray-400" />
               </div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Sınıf adı ara..."
-                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="block w-full pl-10 pr-10 py-2 border-2 border-ide-gray-200 rounded-lg focus:ring-2 focus:ring-ide-primary-500 focus:border-ide-primary-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
-                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  <X className="h-5 w-5 text-ide-gray-400 hover:text-ide-gray-600" />
                 </button>
               )}
             </div>
           </div>
         </div>
         
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="p-4 bg-ide-primary-50 border border-ide-primary-200 rounded-lg">
           <div className="flex items-start">
             <div className="flex-shrink-0">
-              <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Info className="h-5 w-5 text-ide-primary-600 mt-0.5" />
             </div>
             <div className="ml-3">
-              <h4 className="text-sm font-medium text-blue-800">Sürükle & Bırak Kullanımı</h4>
-              <p className="text-sm text-blue-700 mt-1">
+              <h4 className="text-sm font-medium text-ide-primary-800">Sürükle & Bırak Kullanımı</h4>
+              <p className="text-sm text-ide-primary-700 mt-1">
                 Dersleri sürükleyip bırakarak taşıyabilir veya iki dersin yerini değiştirebilirsiniz. Boş bir alana bırakırsanız ders taşınır, dolu bir alana bırakırsanız dersler yer değiştirir.
               </p>
               <div className="mt-2 flex items-center">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  <ArrowsUpDown className="w-3 h-3 mr-1" /> Sürükle & Bırak
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-ide-primary-100 text-ide-primary-800 border border-ide-primary-200">
+                  <ArrowUpDown className="w-3 h-3 mr-1" /> Sürükle & Bırak
                 </span>
               </div>
             </div>
@@ -204,12 +270,12 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
       
       <div className="space-y-12">
         {Object.keys(groupedClasses).length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-              <Filter className="w-8 h-8 text-gray-400" />
+          <div className="text-center py-12 bg-ide-gray-50 rounded-lg border border-ide-gray-200">
+            <div className="w-16 h-16 mx-auto mb-4 bg-ide-gray-100 rounded-full flex items-center justify-center">
+              <Filter className="w-8 h-8 text-ide-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Sınıf Bulunamadı</h3>
-            <p className="text-gray-500 max-w-md mx-auto">
+            <h3 className="text-lg font-medium text-ide-gray-900 mb-2">Sınıf Bulunamadı</h3>
+            <p className="text-ide-gray-600 max-w-md mx-auto">
               {searchQuery 
                 ? `"${searchQuery}" aramasına uygun sınıf bulunamadı.` 
                 : selectedLevel 
@@ -219,7 +285,7 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
             {(searchQuery || selectedLevel) && (
               <button 
                 onClick={() => {setSearchQuery(''); setSelectedLevel('');}}
-                className="mt-4 text-sm font-medium text-purple-600 hover:text-purple-800"
+                className="mt-4 text-sm font-medium text-ide-primary-600 hover:text-ide-primary-800"
               >
                 Filtreleri Temizle
               </button>
@@ -229,22 +295,22 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
           Object.entries(groupedClasses).map(([level, classesInLevel]) => {
             const timePeriods = getTimePeriods(level as any);
             return (
-              <div key={level} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="flex items-center p-4 bg-gradient-to-r from-purple-50 to-purple-100 border-b border-purple-200">
-                  <GraduationCap className="w-6 h-6 mr-3 text-purple-600" />
-                  <h3 className="text-xl font-bold text-purple-900">{level} Programları</h3>
-                  <span className="ml-3 bg-purple-200 text-purple-800 text-xs font-semibold px-2.5 py-1 rounded-full">
+              <div key={level} className="bg-white rounded-xl border border-ide-gray-200 shadow-sm overflow-hidden">
+                <div className="flex items-center p-4 bg-gradient-to-r from-ide-primary-50 to-ide-primary-100 border-b border-ide-primary-200">
+                  <GraduationCap className="w-6 h-6 mr-3 text-ide-primary-600" />
+                  <h3 className="text-xl font-bold text-ide-primary-900">{level} Programları</h3>
+                  <span className="ml-3 bg-ide-primary-200 text-ide-primary-800 text-xs font-semibold px-2.5 py-1 rounded-full border border-ide-primary-300">
                     {classesInLevel.length} sınıf
                   </span>
                 </div>
                 
                 <div className="table-responsive p-4" style={{ maxHeight: '80vh' }}>
                   <table className="min-w-full text-xs border-collapse">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-ide-gray-100">
                       <tr>
-                        <th className="p-2 border border-gray-300 sticky top-0 left-0 bg-gray-200 z-20 w-24">Gün/Saat</th>
+                        <th className="p-2 border border-ide-gray-300 sticky top-0 left-0 bg-ide-gray-200 z-20 w-24">Gün/Saat</th>
                         {classesInLevel.map(c => (
-                          <th key={c.id} className="p-2 border border-gray-300 sticky top-0 bg-gray-100 z-10 whitespace-nowrap">
+                          <th key={c.id} className="p-2 border border-ide-gray-300 sticky top-0 bg-ide-gray-100 z-10 whitespace-nowrap">
                             {c.name}
                           </th>
                         ))}
@@ -254,16 +320,16 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
                       {DAYS.map(day => (
                         <React.Fragment key={day}>
                           <tr>
-                            <td colSpan={classesInLevel.length + 1} className="p-2 font-bold text-center bg-gray-200 border-t-2 border-gray-400">
+                            <td colSpan={classesInLevel.length + 1} className="p-2 font-bold text-center bg-ide-gray-200 border-t-2 border-ide-gray-400">
                               {day}
                             </td>
                           </tr>
                           {timePeriods.map(tp => {
                             if (tp.isBreak) return null;
                             return (
-                              <tr key={`${day}-${tp.period}`} className="hover:bg-gray-50">
-                                <td className="p-2 border border-gray-200 font-semibold sticky left-0 z-10 text-center bg-gray-100">
-                                  {tp.period}. <span className="font-normal text-gray-500">({tp.startTime})</span>
+                              <tr key={`${day}-${tp.period}`} className="hover:bg-ide-gray-50">
+                                <td className="p-2 border border-ide-gray-200 font-semibold sticky left-0 z-10 text-center bg-ide-gray-100">
+                                  {tp.period}. <span className="font-normal text-ide-gray-500">({tp.startTime})</span>
                                 </td>
                                 {classesInLevel.map(c => {
                                   let slot: ScheduleSlot | null = null;
@@ -297,7 +363,7 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
                                   return (
                                     <td 
                                       key={`${c.id}-${day}-${tp.period}`} 
-                                      className={`p-2 border border-gray-200 text-center transition-all ${
+                                      className={`p-2 border border-ide-gray-200 text-center transition-all ${
                                         isDragging 
                                           ? 'shadow-2xl scale-110 z-20 opacity-75' 
                                           : 'hover:shadow-md'
