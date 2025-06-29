@@ -13,10 +13,11 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
 }
 
 /**
- * "Öncelikli Kısıtlı Görev" Algoritması (v44 - Asenkron + Dinamik Limit)
+ * "Öncelikli Kısıtlı Görev" Algoritması (v45 - Sınıf Öğretmeni Önceliği)
  * 1. Yoğun döngüleri asenkron hale getirerek tarayıcı kilitlenmelerini ve eklenti hatalarını önler.
  * 2. Öğretmenin rolüne göre günlük ders limitini uygular.
  * 3. Dersleri blok ve dağıtım şekillerine göre boşluklara dağıtır.
+ * 4. İlkokul ve anaokulu sınıflarında sınıf öğretmenlerinin derslerini öncelikli olarak yerleştirir.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -28,7 +29,7 @@ export async function generateSystematicSchedule(
 ): Promise<EnhancedGenerationResult> {
   
   const startTime = Date.now();
-  console.log('🚀 Program oluşturma başlatıldı (v44 - Asenkron + Dinamik Limit)...');
+  console.log('🚀 Program oluşturma başlatıldı (v45 - Sınıf Öğretmeni Önceliği)...');
 
   // AŞAMA 1: VERİ MATRİSLERİNİ VE GÖREVLERİ HAZIRLA
   const classScheduleGrids: { [classId: string]: Schedule['schedule'] } = {};
@@ -72,17 +73,52 @@ export async function generateSystematicSchedule(
     mapping: SubjectTeacherMapping; 
     blockLength: number; 
     taskId: string; 
-    isPlaced: boolean; 
+    isPlaced: boolean;
+    priority: number; // Öncelik değeri: 1 = en yüksek, 10 = en düşük
   };
   
   const allTasks: PlacementTask[] = [];
+
+  // Sınıf öğretmenlerini ve derslerini belirle
+  const classTeacherMap = new Map<string, string>(); // classId -> teacherId
+  allClasses.forEach(classItem => {
+    if (classItem.classTeacherId) {
+      classTeacherMap.set(classItem.id, classItem.classTeacherId);
+    }
+  });
 
   mappings.forEach(mapping => {
     let hoursLeft = mapping.weeklyHours;
     const distribution = mapping.distribution || [];
     
+    // Öğretmen ve sınıf bilgilerini al
+    const teacher = allTeachers.find(t => t.id === mapping.teacherId);
+    const classItem = allClasses.find(c => c.id === mapping.classId);
+    
+    // Öncelik değerini belirle
+    let priority = 5; // Varsayılan öncelik
+    
+    if (teacher && classItem) {
+      const classLevel = getEntityLevel(classItem);
+      const isClassTeacher = classItem.classTeacherId === teacher.id;
+      const isSinifOgretmenligi = (teacher.branch || '').toUpperCase().includes('SINIF ÖĞRETMENLİĞİ');
+      
+      // İlkokul ve anaokulu sınıflarında sınıf öğretmenlerine yüksek öncelik ver
+      if ((classLevel === 'İlkokul' || classLevel === 'Anaokulu') && isClassTeacher) {
+        priority = 1; // En yüksek öncelik
+      }
+      // Sınıf öğretmenliği branşındaki öğretmenlere orta-yüksek öncelik ver
+      else if ((classLevel === 'İlkokul' || classLevel === 'Anaokulu') && isSinifOgretmenligi) {
+        priority = 2; // Yüksek öncelik
+      }
+      // Ortaokul sınıflarına normal öncelik ver
+      else if (classLevel === 'Ortaokul') {
+        priority = 5; // Normal öncelik
+      }
+    }
+    
     const createTask = (blockLength: number, type: 'dist' | 'single', index: number): PlacementTask => ({
-      mapping, blockLength, taskId: `${mapping.id}-${type}-${index}`, isPlaced: false
+      mapping, blockLength, taskId: `${mapping.id}-${type}-${index}`, isPlaced: false, priority
     });
     
     if (distribution.length > 0 && globalRules.useDistributionPatterns) {
@@ -98,7 +134,22 @@ export async function generateSystematicSchedule(
     }
   });
   
-  allTasks.sort((a, b) => b.blockLength - a.blockLength);
+  // Görevleri öncelik ve blok uzunluğuna göre sırala
+  allTasks.sort((a, b) => {
+    // Önce önceliğe göre sırala (düşük değer = yüksek öncelik)
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority;
+    }
+    // Aynı öncelikte ise blok uzunluğuna göre sırala (uzun bloklar önce)
+    return b.blockLength - a.blockLength;
+  });
+  
+  console.log('📊 Görev önceliklendirmesi:', {
+    topPriority: allTasks.filter(t => t.priority === 1).length,
+    highPriority: allTasks.filter(t => t.priority === 2).length,
+    normalPriority: allTasks.filter(t => t.priority === 5).length,
+    totalTasks: allTasks.length
+  });
   
   // AŞAMA 2 & 3: DERSLERİ YERLEŞTİRME DÖNGÜSÜ
   const maxAttempts = allTasks.length * 5; 
@@ -114,41 +165,94 @@ export async function generateSystematicSchedule(
       await yieldToMainThread();
     }
 
-    const { mapping, blockLength } = task;
+    const { mapping, blockLength, priority } = task;
     const { teacherId, classId, subjectId } = mapping;
     const teacher = allTeachers.find(t => t.id === teacherId);
+    const classItem = allClasses.find(c => c.id === classId);
 
-    if (!teacher) continue;
+    if (!teacher || !classItem) continue;
     
-    const isClassTeacher = (teacher.branch || '').toUpperCase().includes('SINIF ÖĞRETMENLİĞİ');
-    const dailyLimit = isClassTeacher ? 4 : 2;
+    const isClassTeacher = classItem.classTeacherId === teacher.id;
+    const isSinifOgretmenligi = (teacher.branch || '').toUpperCase().includes('SINIF ÖĞRETMENLİĞİ');
+    const classLevel = getEntityLevel(classItem);
+    
+    // Günlük ders limiti - sınıf öğretmenleri için daha yüksek
+    const dailyLimit = (isClassTeacher && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) ? 6 : 
+                      (isSinifOgretmenligi ? 4 : 2);
 
     let placed = false;
-    for (const day of [...DAYS].sort(() => Math.random() - 0.5)) {
+    
+    // Günleri önceliklendirme - sınıf öğretmenleri için tüm günleri kullan
+    const dayOrder = [...DAYS];
+    if (priority <= 2) {
+      // Sınıf öğretmenleri için günleri karıştırma, sırayla yerleştir
+    } else {
+      // Diğer öğretmenler için günleri karıştır
+      dayOrder.sort(() => Math.random() - 0.5);
+    }
+    
+    for (const day of dayOrder) {
         const currentDailyCount = dailyLessonCount.get(classId)?.get(day)?.get(subjectId) || 0;
         
         if ((currentDailyCount + blockLength) > dailyLimit) {
             continue;
         }
 
-        for (let i = 0; i <= PERIODS.length - blockLength; i++) {
+        // Periyotları önceliklendirme - sınıf öğretmenleri için sabah saatlerini tercih et
+        let periodOrder = [...PERIODS];
+        if (priority <= 2 && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
+          // Sınıf öğretmenleri için sabah saatlerini önceliklendir
+          periodOrder.sort((a, b) => {
+            const aNum = parseInt(a);
+            const bNum = parseInt(b);
+            if (isNaN(aNum) || isNaN(bNum)) return 0;
+            return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
+          });
+        } else {
+          // Diğer öğretmenler için periyotları karıştır
+          periodOrder.sort(() => Math.random() - 0.5);
+        }
+
+        for (let i = 0; i <= periodOrder.length - blockLength; i++) {
             let isAvailable = true;
+            const periodIndices = [];
+            
+            // Blok için uygun ardışık periyotları bul
             for (let j = 0; j < blockLength; j++) {
-                const period = PERIODS[i+j];
-                const slotKey = `${day}-${period}`;
-                if (teacherAvailability.get(teacherId)?.has(slotKey) || classAvailability.get(classId)?.has(slotKey) || constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
-                    isAvailable = false;
-                    break;
-                }
+              const periodIndex = periodOrder.indexOf(PERIODS[i+j]);
+              if (periodIndex === -1) {
+                isAvailable = false;
+                break;
+              }
+              periodIndices.push(periodIndex);
             }
+            
+            if (!isAvailable) continue;
+            
+            // Tüm periyotların uygunluğunu kontrol et
+            for (const periodIndex of periodIndices) {
+              const period = periodOrder[periodIndex];
+              const slotKey = `${day}-${period}`;
+              if (teacherAvailability.get(teacherId)?.has(slotKey) || 
+                  classAvailability.get(classId)?.has(slotKey) || 
+                  constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
+                  constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
+                isAvailable = false;
+                break;
+              }
+            }
+            
             if (isAvailable) {
-                for (let j = 0; j < blockLength; j++) {
-                    const period = PERIODS[i + j];
+                // Tüm periyotlara yerleştir
+                for (const periodIndex of periodIndices) {
+                    const period = periodOrder[periodIndex];
                     const slotKey = `${day}-${period}`;
                     classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
                     teacherAvailability.get(teacherId)!.add(slotKey);
                     classAvailability.get(classId)!.add(slotKey);
                 }
+                
+                // Günlük ders sayısını güncelle
                 const dayCountMap = dailyLessonCount.get(classId)!.get(day)!;
                 dayCountMap.set(subjectId, currentDailyCount + blockLength);
                 
