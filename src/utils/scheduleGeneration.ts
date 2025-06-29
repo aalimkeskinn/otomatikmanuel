@@ -58,7 +58,7 @@ export async function generateSystematicSchedule(
       const lunchPeriod = getEntityLevel(classItem) === 'Ortaokul' ? '6' : '5';
       if (PERIODS.includes(lunchPeriod)) {
         DAYS.forEach(day => { 
-          classScheduleGrids[classItem.id][day][lunchPeriod] = { isFixed: true, classId: 'fixed-period', subjectId: 'Yemek' }; 
+          classScheduleGrids[classItem.id][day][lunchPeriod] = { isFixed: true, classId: 'fixed-period', subjectId: 'fixed-lunch' }; 
           classAvailability.get(classItem.id)!.add(`${day}-${lunchPeriod}`); 
         });
       }
@@ -136,7 +136,10 @@ export async function generateSystematicSchedule(
             for (let j = 0; j < blockLength; j++) {
                 const period = PERIODS[i+j];
                 const slotKey = `${day}-${period}`;
-                if (teacherAvailability.get(teacherId)?.has(slotKey) || classAvailability.get(classId)?.has(slotKey) || constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
+                if (teacherAvailability.get(teacherId)?.has(slotKey) || 
+                    classAvailability.get(classId)?.has(slotKey) || 
+                    constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
+                    constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
                     isAvailable = false;
                     break;
                 }

@@ -17,9 +17,9 @@ import ClassSchedules from './pages/ClassSchedules';
 import PDFExport from './pages/PDFExport';
 import DataManagement from './pages/DataManagement';
 import Classrooms from './pages/Classrooms';
-import ToastContainer from './components/UI/ToastContainer';
 // YENİ: Burayı ekledik
 import ScheduleCompletionPage from './pages/ScheduleCompletionPage'; 
+import ToastContainer from './components/UI/ToastContainer';
 
 function App() {
   const { user, loading } = useAuth();

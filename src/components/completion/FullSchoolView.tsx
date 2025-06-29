@@ -38,8 +38,85 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
     return groups;
   }, [classes]);
 
-  const handleDragStart = (cellData: CellData) => { /* ... */ };
-  const handleDrop = (targetCell: CellData) => { /* ... */ };
+  const handleDragStart = (cellData: CellData) => {
+    if (!cellData.slot) return;
+    setDraggingCell(cellData);
+  };
+
+  const handleDrop = (targetCell: CellData) => {
+    if (!draggingCell || !draggingCell.slot) {
+      setDraggingCell(null);
+      return;
+    }
+
+    // Aynı hücreye bırakıldıysa işlem yapmaya gerek yok
+    if (draggingCell.day === targetCell.day && 
+        draggingCell.period === targetCell.period && 
+        draggingCell.classId === targetCell.classId) {
+      setDraggingCell(null);
+      return;
+    }
+
+    // Hedef hücre doluysa takas yap, boşsa taşı
+    if (targetCell.slot) {
+      // Takas işlemi
+      setWorkingSchedules(prevSchedules => {
+        const newSchedules = JSON.parse(JSON.stringify(prevSchedules));
+        
+        // Sürüklenen hücrenin öğretmenini bul
+        const sourceTeacherSchedule = newSchedules.find((s: Schedule) => 
+          s.teacherId === draggingCell.slot?.teacherId
+        );
+        
+        // Hedef hücrenin öğretmenini bul
+        const targetTeacherSchedule = newSchedules.find((s: Schedule) => 
+          s.teacherId === targetCell.slot?.teacherId
+        );
+        
+        if (sourceTeacherSchedule && targetTeacherSchedule) {
+          // Takas işlemi
+          const tempSlot = { ...sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] };
+          sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] = { ...targetTeacherSchedule.schedule[targetCell.day][targetCell.period] };
+          targetTeacherSchedule.schedule[targetCell.day][targetCell.period] = tempSlot;
+          
+          info("Dersler Takas Edildi", `${draggingCell.day} ${draggingCell.period}. ders ve ${targetCell.day} ${targetCell.period}. ders arasında takas yapıldı.`);
+        } else {
+          error("Takas Yapılamadı", "Öğretmen programları bulunamadı.");
+        }
+        
+        return newSchedules;
+      });
+    } else {
+      // Taşıma işlemi
+      setWorkingSchedules(prevSchedules => {
+        const newSchedules = JSON.parse(JSON.stringify(prevSchedules));
+        
+        // Sürüklenen hücrenin öğretmenini bul
+        const teacherSchedule = newSchedules.find((s: Schedule) => 
+          s.teacherId === draggingCell.slot?.teacherId
+        );
+        
+        if (teacherSchedule) {
+          // Eski konumdan kaldır
+          teacherSchedule.schedule[draggingCell.day][draggingCell.period] = null;
+          
+          // Yeni konuma taşı
+          teacherSchedule.schedule[targetCell.day][targetCell.period] = {
+            classId: draggingCell.slot?.classId,
+            subjectId: draggingCell.slot?.subjectId
+          };
+          
+          info("Ders Taşındı", `${draggingCell.day} ${draggingCell.period}. dersten ${targetCell.day} ${targetCell.period}. derse taşındı.`);
+        } else {
+          error("Taşıma Yapılamadı", "Öğretmen programı bulunamadı.");
+        }
+        
+        return newSchedules;
+      });
+    }
+    
+    setDraggingCell(null);
+  };
 
   return (
     <div>
