@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Schedule, Teacher, Class, Subject, DAYS, getTimePeriods, formatTimeRange, PERIODS, ScheduleSlot, EDUCATION_LEVELS } from '../../types';
 import { stringToHslColor } from '../../utils/colorUtils';
-import { GraduationCap, Lock, ArrowsUpDown, Info, Filter, Search, X } from 'lucide-react';
+import { GraduationCap, Lock, ArrowUpDown as ArrowsUpDown, Info, Filter, Search, X } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import Select from '../UI/Select';
 
