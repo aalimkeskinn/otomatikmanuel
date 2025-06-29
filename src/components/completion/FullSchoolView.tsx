@@ -44,76 +44,74 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
   };
 
   const handleDrop = (targetCell: CellData) => {
-    if (!draggingCell || !draggingCell.slot) {
+    if (!draggingCell) return;
+    
+    // Aynı hücreye bırakılıyorsa işlem yapma
+    if (draggingCell.classId === targetCell.classId && 
+        draggingCell.day === targetCell.day && 
+        draggingCell.period === targetCell.period) {
       setDraggingCell(null);
       return;
     }
-
-    // Aynı hücreye bırakıldıysa işlem yapmaya gerek yok
-    if (draggingCell.day === targetCell.day && 
-        draggingCell.period === targetCell.period && 
-        draggingCell.classId === targetCell.classId) {
+    
+    // Kaynak ve hedef slotları belirle
+    const sourceSlot = draggingCell.slot;
+    const targetSlot = targetCell.slot;
+    
+    if (!sourceSlot || !sourceSlot.teacherId) {
       setDraggingCell(null);
       return;
     }
-
-    // Hedef hücre doluysa takas yap, boşsa taşı
-    if (targetCell.slot) {
-      // Takas işlemi
-      setWorkingSchedules(prevSchedules => {
-        const newSchedules = JSON.parse(JSON.stringify(prevSchedules));
-        
-        // Sürüklenen hücrenin öğretmenini bul
-        const sourceTeacherSchedule = newSchedules.find((s: Schedule) => 
-          s.teacherId === draggingCell.slot?.teacherId
-        );
-        
-        // Hedef hücrenin öğretmenini bul
-        const targetTeacherSchedule = newSchedules.find((s: Schedule) => 
-          s.teacherId === targetCell.slot?.teacherId
-        );
-        
-        if (sourceTeacherSchedule && targetTeacherSchedule) {
-          // Takas işlemi
-          const tempSlot = { ...sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] };
-          sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] = { ...targetTeacherSchedule.schedule[targetCell.day][targetCell.period] };
-          targetTeacherSchedule.schedule[targetCell.day][targetCell.period] = tempSlot;
-          
-          info("Dersler Takas Edildi", `${draggingCell.day} ${draggingCell.period}. ders ve ${targetCell.day} ${targetCell.period}. ders arasında takas yapıldı.`);
-        } else {
-          error("Takas Yapılamadı", "Öğretmen programları bulunamadı.");
+    
+    setWorkingSchedules(prevSchedules => {
+      const newSchedules = JSON.parse(JSON.stringify(prevSchedules));
+      
+      // Kaynak öğretmenin programını bul
+      const sourceTeacherSchedule = newSchedules.find((s: Schedule) => s.teacherId === sourceSlot.teacherId);
+      if (!sourceTeacherSchedule) {
+        error("Öğretmen programı bulunamadı", "Sürüklenen dersin öğretmen programı bulunamadı.");
+        return prevSchedules;
+      }
+      
+      // Hedef hücrede bir ders varsa (takas işlemi)
+      if (targetSlot && targetSlot.teacherId) {
+        // Hedef öğretmenin programını bul
+        const targetTeacherSchedule = newSchedules.find((s: Schedule) => s.teacherId === targetSlot.teacherId);
+        if (!targetTeacherSchedule) {
+          error("Hedef öğretmen programı bulunamadı", "Takas yapılacak dersin öğretmen programı bulunamadı.");
+          return prevSchedules;
         }
         
-        return newSchedules;
-      });
-    } else {
-      // Taşıma işlemi
-      setWorkingSchedules(prevSchedules => {
-        const newSchedules = JSON.parse(JSON.stringify(prevSchedules));
+        // Takas işlemi - Kaynak dersi hedef konuma taşı
+        targetTeacherSchedule.schedule[targetCell.day][targetCell.period] = {
+          classId: draggingCell.classId,
+          subjectId: sourceSlot.subjectId
+        };
         
-        // Sürüklenen hücrenin öğretmenini bul
-        const teacherSchedule = newSchedules.find((s: Schedule) => 
-          s.teacherId === draggingCell.slot?.teacherId
-        );
+        // Hedef dersi kaynak konuma taşı
+        sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] = {
+          classId: targetCell.classId,
+          subjectId: targetSlot.subjectId
+        };
         
-        if (teacherSchedule) {
-          // Eski konumdan kaldır
-          teacherSchedule.schedule[draggingCell.day][draggingCell.period] = null;
-          
-          // Yeni konuma taşı
-          teacherSchedule.schedule[targetCell.day][targetCell.period] = {
-            classId: draggingCell.slot?.classId,
-            subjectId: draggingCell.slot?.subjectId
-          };
-          
-          info("Ders Taşındı", `${draggingCell.day} ${draggingCell.period}. dersten ${targetCell.day} ${targetCell.period}. derse taşındı.`);
-        } else {
-          error("Taşıma Yapılamadı", "Öğretmen programı bulunamadı.");
-        }
+        info("Dersler Takas Edildi", `${draggingCell.day} ${draggingCell.period}. saat ile ${targetCell.day} ${targetCell.period}. saat arasında takas yapıldı.`);
+      } 
+      // Hedef hücre boşsa (taşıma işlemi)
+      else {
+        // Kaynak dersi hedef konuma taşı
+        sourceTeacherSchedule.schedule[targetCell.day][targetCell.period] = {
+          classId: targetCell.classId,
+          subjectId: sourceSlot.subjectId
+        };
         
-        return newSchedules;
-      });
-    }
+        // Kaynak konumu boşalt
+        sourceTeacherSchedule.schedule[draggingCell.day][draggingCell.period] = null;
+        
+        info("Ders Taşındı", `Ders ${draggingCell.day} ${draggingCell.period}. saatten ${targetCell.day} ${targetCell.period}. saate taşındı.`);
+      }
+      
+      return newSchedules;
+    });
     
     setDraggingCell(null);
   };

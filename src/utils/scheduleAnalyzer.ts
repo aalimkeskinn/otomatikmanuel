@@ -2,7 +2,6 @@
 
 import { Schedule, Teacher, Class, Subject, DAYS, PERIODS } from '../types';
 import { UnassignedLesson } from '../types/wizard';
-import { TimeConstraint } from '../types/constraints';
 
 /**
  * Bir slotun (zaman diliminin) neden uygun olmadığını açıklayan arayüz.
@@ -51,14 +50,14 @@ export function analyzeUnassignedLesson(
       if (teacherSlot) {
         const conflictClass = allClasses.find(c => c.id === teacherSlot.classId);
         const conflictSubject = allSubjects.find(s => s.id === teacherSlot.subjectId);
-        reasons.push(`Öğretmen bu saatte ${conflictClass?.name || ''} sınıfına ${conflictSubject?.name || 'başka bir'} dersi veriyor.`);
+        reasons.push(`Öğretmen, ${conflictClass?.name || ''} sınıfına ${conflictSubject?.name || 'başka bir'} dersi veriyor.`);
       }
 
       const classSlot = classSchedule[day]?.[period];
       if (classSlot) {
         if (classSlot.teacherId !== lesson.teacherId) {
             const conflictTeacher = allTeachers.find(t => t.id === classSlot.teacherId);
-            reasons.push(`Sınıf bu saatte ${conflictTeacher?.name || ''} öğretmeninden ders alıyor.`);
+            reasons.push(`Sınıf, ${conflictTeacher?.name || ''} öğretmeninden ders alıyor.`);
         }
       }
       
