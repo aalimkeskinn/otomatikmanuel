@@ -160,7 +160,7 @@ const ScheduleWizard = () => {
         error("Eşleştirme Hatası", "Hiçbir ders-öğretmen-sınıf eşleştirmesi yapılamadı. Lütfen seçimlerinizi kontrol edin.");
         setIsGenerating(false); return;
       }
-      const result = generateSystematicSchedule(mappings, teachers, classes, subjects, wizardData.constraints?.timeConstraints || [], wizardData.constraints.globalRules);
+      const result = await generateSystematicSchedule(mappings, teachers, classes, subjects, wizardData.constraints?.timeConstraints || [], wizardData.constraints.globalRules);
       
       if (!result || !result.schedules) {
           error("Oluşturma Hatası", "Algoritma beklenmedik bir sonuç döndürdü.");
@@ -273,7 +273,8 @@ const ScheduleWizard = () => {
                       Toplam {generationResult.statistics.totalLessonsToPlace} ders saatinden 
                       <strong className="text-green-600 mx-1">{generationResult.statistics.placedLessons}</strong> tanesi başarıyla yerleştirildi.
                     </p>
-                    {generationResult.statistics.unassignedLessons.length > 0 && (
+                    
+                    {generationResult.statistics.unassignedLessons && generationResult.statistics.unassignedLessons.length > 0 ? (
                       <div className="mt-4">
                         <p className="text-sm text-red-600 font-semibold">
                           {generationResult.statistics.unassignedLessons.length} ders yerleştirilemedi.
@@ -286,8 +287,7 @@ const ScheduleWizard = () => {
                           Eksik Dersleri Manuel Tamamla
                         </Button>
                       </div>
-                    )}
-                    {generationResult.statistics.unassignedLessons.length === 0 && (
+                    ) : (
                        <Button 
                         className="mt-4"
                         variant="primary"

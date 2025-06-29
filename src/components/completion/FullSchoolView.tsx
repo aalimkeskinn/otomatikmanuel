@@ -210,3 +210,4 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
 };
 
 export default FullSchoolView;
+// --- END OF FILE src/components/completion/FullSchoolView.tsx ---
