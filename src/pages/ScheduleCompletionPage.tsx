@@ -189,11 +189,11 @@ const ScheduleCompletionPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-ide-primary-50">
+      <div className="flex justify-center items-center h-screen bg-gray-50">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 border-4 border-t-ide-primary-600 border-b-ide-primary-600 border-l-gray-200 border-r-gray-200 rounded-full animate-spin"></div>
-          <h2 className="text-xl font-semibold text-ide-primary-800">Veriler Yükleniyor</h2>
-          <p className="text-ide-primary-600 mt-2">Lütfen bekleyin...</p>
+          <div className="w-12 h-12 mx-auto mb-3 border-4 border-t-blue-600 border-b-blue-600 border-l-gray-200 border-r-gray-200 rounded-full animate-spin"></div>
+          <h2 className="text-lg font-semibold text-gray-800">Veriler Yükleniyor</h2>
+          <p className="text-gray-600 mt-1">Lütfen bekleyin...</p>
         </div>
       </div>
     );
@@ -201,16 +201,16 @@ const ScheduleCompletionPage = () => {
   
   if (!location.state?.unassignedLessons) {
     return (
-      <div className="min-h-screen bg-ide-primary-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-8 text-center border border-ide-primary-100">
-          <div className="w-16 h-16 bg-ide-primary-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="h-8 w-8 text-ide-primary-600" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-md max-w-md w-full p-6 text-center border border-gray-200">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-6 w-6 text-gray-600" />
           </div>
-          <h2 className="text-2xl font-bold text-ide-primary-900 mb-3">Veri Bulunamadı</h2>
-          <p className="text-ide-primary-700 mb-6">Bu sayfaya doğrudan erişilemez. Lütfen sihirbazdan yönlendirmeyi kullanın.</p>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Veri Bulunamadı</h2>
+          <p className="text-gray-600 mb-4">Bu sayfaya doğrudan erişilemez. Lütfen sihirbazdan yönlendirmeyi kullanın.</p>
           <Button 
             onClick={() => navigate('/schedule-wizard')} 
-            variant="ide-primary" 
+            variant="primary" 
             className="w-full"
             icon={ArrowLeft}
           >
@@ -222,165 +222,129 @@ const ScheduleCompletionPage = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-ide-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between flex-wrap gap-4 sticky top-0 z-20">
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header - Daha kompakt */}
+      <div className="bg-white shadow-sm border-b p-3 flex items-center justify-between flex-wrap gap-2 sticky top-0 z-20">
         <div className="flex items-center">
-          <div className="w-12 h-12 bg-ide-primary-100 rounded-xl flex items-center justify-center mr-4 shadow-sm border border-ide-primary-200">
-            <BrainCircuit className="w-7 h-7 text-ide-primary-600" />
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <BrainCircuit className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-ide-primary-900">Yardımcı Atama Modülü</h1>
-            <p className="text-sm text-ide-primary-600">
+            <h1 className="text-base font-bold text-gray-900">Yardımcı Atama Modülü</h1>
+            <p className="text-xs text-gray-600">
               {unassignedLessons.filter(l => l.missingHours > 0).length} dersin yerleşimi tamamlanacak
             </p>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <Button 
             variant="secondary" 
             onClick={() => navigate('/schedule-wizard')}
             icon={ArrowLeft}
-            className="border-2 border-ide-gray-200 hover:border-ide-primary-200"
+            size="sm"
           >
-            Sihirbaza Dön
+            Geri
           </Button>
           <Button 
-            variant="ide-primary" 
+            variant="primary" 
             icon={Save} 
             onClick={handleSaveAll} 
             disabled={isSaving}
-            className="shadow-md hover:shadow-lg"
+            size="sm"
           >
-            {isSaving ? "Kaydediliyor..." : "Değişiklikleri Kaydet ve Bitir"}
+            {isSaving ? "Kaydediliyor..." : "Kaydet"}
           </Button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 overflow-hidden">
-        {/* Left Sidebar - Unassigned Lessons */}
-        <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-ide-gray-200 p-5 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center text-ide-primary-900">
-              <ListTodo className="w-5 h-5 mr-2 text-ide-primary-600" />
+      {/* Main Content - Daha kompakt */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 overflow-hidden">
+        {/* Left Sidebar - Unassigned Lessons - Daha kompakt */}
+        <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold flex items-center text-gray-800">
+              <ListTodo className="w-4 h-4 mr-1 text-blue-600" />
               Yerleştirilecek Dersler
             </h2>
-            <span className="bg-ide-primary-100 text-ide-primary-800 text-xs font-semibold px-2.5 py-1 rounded-full border border-ide-primary-200">
-              {filteredUnassignedLessons.length} ders
+            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
+              {filteredUnassignedLessons.length}
             </span>
           </div>
 
-          {/* Search Box */}
-          <div className="mb-4">
+          {/* Search Box - Daha kompakt */}
+          <div className="mb-2">
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-ide-gray-400" />
+              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
               </div>
               <input
                 type="text"
-                placeholder="Ders, sınıf veya öğretmen ara..."
+                placeholder="Ara..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 border-2 border-ide-gray-200 rounded-lg focus:ring-2 focus:ring-ide-primary-500 focus:border-ide-primary-500 text-ide-gray-700"
+                className="w-full pl-7 pr-7 py-1 text-xs border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-2 flex items-center"
                 >
-                  <X className="h-5 w-5 text-ide-gray-400 hover:text-ide-gray-600" />
+                  <X className="h-3 w-3 text-gray-400 hover:text-gray-600" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Lessons List */}
-          <div className="flex-1 space-y-3 overflow-y-auto pr-2">
+          {/* Lessons List - Daha kompakt */}
+          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredUnassignedLessons.length > 0 ? (
               filteredUnassignedLessons.map((lesson, index) => {
                 const isSelected = selectedLesson?.teacherName === lesson.teacherName && 
                                   selectedLesson?.className === lesson.className && 
                                   selectedLesson?.subjectName === lesson.subjectName;
                 
-                // Renk hesaplama
-                const getSubjectColor = (subjectName: string) => {
-                  const colors = [
-                    'bg-ide-primary-50 border-ide-primary-200 text-ide-primary-800',
-                    'bg-ide-secondary-50 border-ide-secondary-200 text-ide-secondary-800',
-                    'bg-purple-50 border-purple-200 text-purple-800',
-                    'bg-blue-50 border-blue-200 text-blue-800',
-                    'bg-indigo-50 border-indigo-200 text-indigo-800'
-                  ];
-                  
-                  // Basit bir hash fonksiyonu
-                  let hash = 0;
-                  for (let i = 0; i < subjectName.length; i++) {
-                    hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
-                  }
-                  
-                  return colors[Math.abs(hash) % colors.length];
-                };
-                
-                const colorClass = getSubjectColor(lesson.subjectName);
-                
                 return (
                   <div 
                     key={`${lesson.teacherId}-${lesson.subjectId}-${index}`} 
                     onClick={() => setSelectedLesson(lesson)} 
-                    className={`p-4 rounded-xl cursor-pointer border-2 transition-all ${
+                    className={`p-2 rounded-lg cursor-pointer border text-xs transition-all ${
                       isSelected 
-                        ? 'bg-ide-primary-50 border-ide-primary-500 shadow-md transform scale-[1.02]' 
-                        : 'bg-white border-ide-gray-200 hover:border-ide-primary-300 hover:shadow-sm'
+                        ? 'bg-blue-50 border-blue-500 shadow-sm' 
+                        : 'bg-white border-gray-200 hover:border-blue-300'
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mb-2 ${colorClass}`}>
+                        <div className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-md mb-1 bg-blue-50 text-blue-700">
                           {lesson.subjectName}
                         </div>
-                        <p className="font-bold text-ide-gray-800">{lesson.className}</p>
-                        <p className="text-sm text-ide-gray-600">{lesson.teacherName}</p>
+                        <p className="font-medium text-gray-800">{lesson.className}</p>
+                        <p className="text-xs text-gray-600">{lesson.teacherName}</p>
                       </div>
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                      <div className={`flex items-center justify-center w-5 h-5 rounded-full ${
                         lesson.missingHours > 0 
-                          ? 'bg-ide-accent-100 text-ide-accent-600 border border-ide-accent-200' 
-                          : 'bg-ide-secondary-100 text-ide-secondary-600 border border-ide-secondary-200'
+                          ? 'bg-red-100 text-red-600 border border-red-200' 
+                          : 'bg-green-100 text-green-600 border border-green-200'
                       }`}>
                         {lesson.missingHours > 0 
                           ? <span className="text-xs font-bold">{lesson.missingHours}</span>
-                          : <CheckCircle className="w-4 h-4" />
+                          : <CheckCircle className="w-3 h-3" />
                         }
                       </div>
-                    </div>
-                    
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className={`font-semibold flex items-center ${
-                        lesson.missingHours > 0 ? 'text-ide-accent-600' : 'text-ide-secondary-600'
-                      }`}>
-                        {lesson.missingHours > 0 
-                          ? <><Hourglass className="w-3 h-3 mr-1" /> {lesson.missingHours} saat eksik</> 
-                          : <><CheckCircle className="w-4 h-4 mr-1" /> Tamamlandı</>
-                        }
-                      </span>
-                      <span className="text-ide-gray-500">
-                        {lesson.totalHours} saat/hafta
-                      </span>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center h-40 text-center">
-                <div className="w-12 h-12 bg-ide-gray-100 rounded-full flex items-center justify-center mb-3">
-                  <Info className="w-6 h-6 text-ide-gray-400" />
+              <div className="flex flex-col items-center justify-center h-32 text-center">
+                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mb-2">
+                  <Info className="w-4 h-4 text-gray-400" />
                 </div>
-                <p className="text-ide-gray-500 font-medium">Arama sonucu bulunamadı</p>
-                <p className="text-xs text-ide-gray-400 mt-1">Farklı bir arama terimi deneyin</p>
+                <p className="text-gray-500 text-xs">Sonuç bulunamadı</p>
                 {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery('')}
-                    className="mt-3 text-sm text-ide-primary-600 hover:text-ide-primary-800 font-medium"
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
                   >
                     Aramayı Temizle
                   </button>
@@ -390,30 +354,30 @@ const ScheduleCompletionPage = () => {
           </div>
         </div>
 
-        {/* Right Content Area */}
-        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-ide-gray-200 p-6 flex flex-col overflow-y-auto">
-          {/* View Mode Tabs */}
-          <div className="border-b border-ide-gray-200 mb-4 flex-shrink-0">
-            <nav className="-mb-px flex space-x-6">
+        {/* Right Content Area - Daha kompakt */}
+        <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex flex-col overflow-y-auto">
+          {/* View Mode Tabs - Daha kompakt */}
+          <div className="border-b border-gray-200 mb-3 flex-shrink-0">
+            <nav className="-mb-px flex space-x-4">
               <button 
                 onClick={() => setViewMode('focus')} 
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                className={`py-1 px-1 border-b-2 font-medium text-xs flex items-center ${
                   viewMode === 'focus' 
-                    ? 'border-ide-primary-500 text-ide-primary-600' 
-                    : 'border-transparent text-ide-gray-500 hover:text-ide-gray-700 hover:border-ide-gray-300'
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Eye className="w-4 h-4 mr-2" /> Odaklanmış Analiz
+                <Eye className="w-3 h-3 mr-1" /> Odaklanmış Analiz
               </button>
               <button 
                 onClick={() => setViewMode('overview')} 
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                className={`py-1 px-1 border-b-2 font-medium text-xs flex items-center ${
                   viewMode === 'overview' 
-                    ? 'border-ide-primary-500 text-ide-primary-600' 
-                    : 'border-transparent text-ide-gray-500 hover:text-ide-gray-700 hover:border-ide-gray-300'
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <LayoutGrid className="w-4 h-4 mr-2" /> Okul Geneli Görünüm
+                <LayoutGrid className="w-3 h-3 mr-1" /> Okul Geneli Görünüm
               </button>
             </nav>
           </div>
@@ -433,26 +397,14 @@ const ScheduleCompletionPage = () => {
                   constraints={constraints}
                 />
               ) : (
-                <div className="text-center h-full flex flex-col justify-center items-center p-8">
-                  <div className="w-24 h-24 bg-ide-primary-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                    <BrainCircuit className="w-12 h-12 text-ide-primary-500" />
+                <div className="text-center h-full flex flex-col justify-center items-center p-4">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <BrainCircuit className="w-8 h-8 text-gray-400" />
                   </div>
-                  <h3 className="text-xl font-medium text-ide-primary-900 mb-3">Başlamak için bir ders seçin</h3>
-                  <p className="text-ide-gray-600 max-w-md">
-                    Soldaki listeden bir derse tıklayarak hem sınıfın hem de öğretmenin programını aynı anda görüntüleyin ve çakışmayan boş saatleri kolayca bulun.
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">Başlamak için bir ders seçin</h3>
+                  <p className="text-gray-500 text-sm max-w-md">
+                    Soldaki listeden bir derse tıklayarak hem sınıfın hem de öğretmenin programını aynı anda görüntüleyin.
                   </p>
-                  <div className="mt-6 p-4 bg-ide-primary-50 border border-ide-primary-200 rounded-lg max-w-md">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <Info className="h-5 w-5 text-ide-primary-500" />
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-ide-primary-700">
-                          <span className="font-semibold">İpucu:</span> Yeşil renkli alanlar dersin yerleştirilebileceği uygun saatleri gösterir. Kırmızı alanlar ise çakışma olan saatleri gösterir.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )
             )}
