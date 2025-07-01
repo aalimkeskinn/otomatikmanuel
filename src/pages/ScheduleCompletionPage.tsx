@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BrainCircuit, CheckCircle, Hourglass, ListTodo, Save, Eye, LayoutGrid, ArrowLeft, Info, AlertCircle, Search, X } from 'lucide-react';
+import { BrainCircuit, CheckCircle, Hourglass, ListTodo, Save, Eye, LayoutGrid, ArrowLeft, Info, AlertCircle, Search, X, Zap } from 'lucide-react';
 import { UnassignedLesson } from '../types/wizard';
 import Button from '../components/UI/Button';
 import { useFirestore } from '../hooks/useFirestore';
@@ -18,7 +18,7 @@ import { useConfirmation } from '../hooks/useConfirmation';
 const ScheduleCompletionPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { success, error, info } = useToast();
+  const { success, error, info, warning } = useToast();
   const { showConfirmation } = useConfirmation();
 
   const { data: teachers, loading: loadingT } = useFirestore<Teacher>('teachers');
@@ -33,6 +33,7 @@ const ScheduleCompletionPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'focus' | 'overview'>('focus');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAutoPlacing, setIsAutoPlacing] = useState(false);
   
   useEffect(() => {
     if (location.state?.unassignedLessons) {
@@ -148,6 +149,98 @@ const ScheduleCompletionPage = () => {
     });
   };
 
+  // YENİ: Otomatik yerleştirme fonksiyonu
+  const handleAutoPlacement = async () => {
+    if (unassignedLessons.length === 0) {
+      warning("Yerleştirilecek Ders Yok", "Tüm dersler zaten yerleştirilmiş.");
+      return;
+    }
+
+    setIsAutoPlacing(true);
+    info("Otomatik Yerleştirme Başlatıldı", "Dersler en uygun boşluklara yerleştirilmeye çalışılıyor...");
+
+    try {
+      // Yerleştirilecek derslerin kopyasını oluştur
+      let remainingLessons = [...unassignedLessons];
+      let placedCount = 0;
+
+      // Her ders için tüm olası slotları kontrol et
+      for (const lesson of [...remainingLessons]) {
+        if (lesson.missingHours <= 0) continue;
+
+        // Öğretmen ve sınıf programlarını al
+        const teacherSchedule = workingSchedules.find(s => s.teacherId === lesson.teacherId)?.schedule || createEmptyScheduleGrid();
+        const classSchedule: Schedule['schedule'] = createEmptyScheduleGrid();
+        
+        workingSchedules.forEach(s => {
+          Object.entries(s.schedule).forEach(([day, daySlots]) => {
+            if (daySlots) {
+              Object.entries(daySlots).forEach(([period, slot]) => {
+                if (slot?.classId === lesson.classId) {
+                  if (!classSchedule[day]) classSchedule[day] = {};
+                  classSchedule[day][period] = { ...slot, teacherId: s.teacherId };
+                }
+              });
+            }
+          });
+        });
+
+        // Tüm günleri ve periyotları kontrol et
+        let lessonPlaced = false;
+        const shuffledDays = [...DAYS].sort(() => Math.random() - 0.5);
+        
+        for (const day of shuffledDays) {
+          if (lessonPlaced) break;
+          
+          const shuffledPeriods = [...PERIODS].sort(() => Math.random() - 0.5);
+          
+          for (const period of shuffledPeriods) {
+            // Öğretmen ve sınıf bu slotta müsait mi kontrol et
+            const teacherSlot = teacherSchedule[day]?.[period];
+            const classSlot = classSchedule[day]?.[period];
+            
+            if (!teacherSlot && !classSlot) {
+              // Slot boş, dersi yerleştir
+              assignLessonToSlot(lesson, day, period);
+              
+              // Yerleştirilen dersi güncelle
+              remainingLessons = remainingLessons.map(l => {
+                if (l === lesson) {
+                  return { ...l, missingHours: l.missingHours - 1 };
+                }
+                return l;
+              }).filter(l => l.missingHours > 0);
+              
+              placedCount++;
+              lessonPlaced = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Yerleştirilemeyen dersleri güncelle
+      setUnassignedLessons(remainingLessons);
+      
+      if (remainingLessons.length === 0) {
+        success("✅ Tüm Dersler Yerleştirildi", `${placedCount} ders saati başarıyla yerleştirildi.`);
+      } else if (placedCount > 0) {
+        info("🔄 Kısmen Yerleştirildi", `${placedCount} ders saati yerleştirildi, ${remainingLessons.length} ders hala yerleştirilmeyi bekliyor.`);
+      } else {
+        warning("⚠️ Yerleştirilemedi", "Hiçbir ders yerleştirilemedi. Uygun boş slot bulunamadı.");
+      }
+      
+      // Seçili dersi güncelle
+      setSelectedLesson(remainingLessons[0] || null);
+      
+    } catch (err) {
+      console.error("Otomatik yerleştirme hatası:", err);
+      error("❌ Yerleştirme Hatası", "Dersler yerleştirilirken bir hata oluştu.");
+    } finally {
+      setIsAutoPlacing(false);
+    }
+  };
+
   const handleSaveAll = async () => {
     setIsSaving(true);
     try {
@@ -224,13 +317,13 @@ const ScheduleCompletionPage = () => {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header - Daha kompakt */}
-      <div className="bg-white shadow-sm border-b p-3 flex items-center justify-between flex-wrap gap-2 sticky top-0 z-20">
+      <div className="bg-white shadow-sm border-b p-2 flex items-center justify-between flex-wrap gap-2 sticky top-0 z-20">
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-            <BrainCircuit className="w-5 h-5 text-blue-600" />
+          <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
+            <BrainCircuit className="w-4 h-4 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-gray-900">Yardımcı Atama Modülü</h1>
+            <h1 className="text-sm font-bold text-gray-900">Yardımcı Atama Modülü</h1>
             <p className="text-xs text-gray-600">
               {unassignedLessons.filter(l => l.missingHours > 0).length} dersin yerleşimi tamamlanacak
             </p>
@@ -258,9 +351,9 @@ const ScheduleCompletionPage = () => {
       </div>
 
       {/* Main Content - Daha kompakt */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-2 p-2 overflow-hidden">
         {/* Left Sidebar - Unassigned Lessons - Daha kompakt */}
-        <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex flex-col overflow-hidden">
+        <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold flex items-center text-gray-800">
               <ListTodo className="w-4 h-4 mr-1 text-blue-600" />
@@ -271,18 +364,34 @@ const ScheduleCompletionPage = () => {
             </span>
           </div>
 
+          {/* YENİ: Otomatik Yerleştirme Butonu */}
+          {filteredUnassignedLessons.length > 0 && (
+            <div className="mb-2">
+              <Button
+                onClick={handleAutoPlacement}
+                icon={Zap}
+                variant="primary"
+                size="sm"
+                disabled={isAutoPlacing}
+                className="w-full"
+              >
+                {isAutoPlacing ? "Yerleştiriliyor..." : "Otomatik Yerleştir"}
+              </Button>
+            </div>
+          )}
+
           {/* Search Box - Daha kompakt */}
           <div className="mb-2">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+                <Search className="h-3 w-3 text-gray-400" />
               </div>
               <input
                 type="text"
                 placeholder="Ara..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-7 pr-7 py-1 text-xs border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-6 pr-6 py-1 text-xs border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
               {searchQuery && (
                 <button
@@ -296,7 +405,7 @@ const ScheduleCompletionPage = () => {
           </div>
 
           {/* Lessons List - Daha kompakt */}
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="flex-1 space-y-1 overflow-y-auto pr-1">
             {filteredUnassignedLessons.length > 0 ? (
               filteredUnassignedLessons.map((lesson, index) => {
                 const isSelected = selectedLesson?.teacherName === lesson.teacherName && 
@@ -307,7 +416,7 @@ const ScheduleCompletionPage = () => {
                   <div 
                     key={`${lesson.teacherId}-${lesson.subjectId}-${index}`} 
                     onClick={() => setSelectedLesson(lesson)} 
-                    className={`p-2 rounded-lg cursor-pointer border text-xs transition-all ${
+                    className={`p-1.5 rounded-lg cursor-pointer border text-xs transition-all ${
                       isSelected 
                         ? 'bg-blue-50 border-blue-500 shadow-sm' 
                         : 'bg-white border-gray-200 hover:border-blue-300'
@@ -318,17 +427,17 @@ const ScheduleCompletionPage = () => {
                         <div className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-md mb-1 bg-blue-50 text-blue-700">
                           {lesson.subjectName}
                         </div>
-                        <p className="font-medium text-gray-800">{lesson.className}</p>
+                        <p className="font-medium text-gray-800 text-xs">{lesson.className}</p>
                         <p className="text-xs text-gray-600">{lesson.teacherName}</p>
                       </div>
-                      <div className={`flex items-center justify-center w-5 h-5 rounded-full ${
+                      <div className={`flex items-center justify-center w-4 h-4 rounded-full ${
                         lesson.missingHours > 0 
                           ? 'bg-red-100 text-red-600 border border-red-200' 
                           : 'bg-green-100 text-green-600 border border-green-200'
                       }`}>
                         {lesson.missingHours > 0 
                           ? <span className="text-xs font-bold">{lesson.missingHours}</span>
-                          : <CheckCircle className="w-3 h-3" />
+                          : <CheckCircle className="w-2 h-2" />
                         }
                       </div>
                     </div>
@@ -355,9 +464,9 @@ const ScheduleCompletionPage = () => {
         </div>
 
         {/* Right Content Area - Daha kompakt */}
-        <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex flex-col overflow-y-auto">
+        <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-col overflow-y-auto">
           {/* View Mode Tabs - Daha kompakt */}
-          <div className="border-b border-gray-200 mb-3 flex-shrink-0">
+          <div className="border-b border-gray-200 mb-2 flex-shrink-0">
             <nav className="-mb-px flex space-x-4">
               <button 
                 onClick={() => setViewMode('focus')} 
@@ -398,11 +507,11 @@ const ScheduleCompletionPage = () => {
                 />
               ) : (
                 <div className="text-center h-full flex flex-col justify-center items-center p-4">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <BrainCircuit className="w-8 h-8 text-gray-400" />
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <BrainCircuit className="w-6 h-6 text-gray-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">Başlamak için bir ders seçin</h3>
-                  <p className="text-gray-500 text-sm max-w-md">
+                  <h3 className="text-base font-medium text-gray-700 mb-2">Başlamak için bir ders seçin</h3>
+                  <p className="text-gray-500 text-xs max-w-md">
                     Soldaki listeden bir derse tıklayarak hem sınıfın hem de öğretmenin programını aynı anda görüntüleyin.
                   </p>
                 </div>
