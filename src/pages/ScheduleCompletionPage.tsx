@@ -163,9 +163,20 @@ const ScheduleCompletionPage = () => {
       // Yerleştirilecek derslerin kopyasını oluştur
       let remainingLessons = [...unassignedLessons];
       let placedCount = 0;
-
+      
+      // Önce anaokulu derslerini yerleştir
+      const anaokulLessons = remainingLessons.filter(lesson => {
+        const classItem = classes.find(c => c.id === lesson.classId);
+        return classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
+      });
+      
+      const otherLessons = remainingLessons.filter(lesson => !anaokulLessons.includes(lesson));
+      
+      // Önce anaokulu derslerini, sonra diğer dersleri işle
+      const processingOrder = [...anaokulLessons, ...otherLessons];
+      
       // Her ders için tüm olası slotları kontrol et
-      for (const lesson of [...remainingLessons]) {
+      for (const lesson of processingOrder) {
         if (lesson.missingHours <= 0) continue;
 
         // Öğretmen ve sınıf programlarını al
@@ -187,14 +198,37 @@ const ScheduleCompletionPage = () => {
 
         // Tüm günleri ve periyotları kontrol et
         let lessonPlaced = false;
-        const shuffledDays = [...DAYS].sort(() => Math.random() - 0.5);
         
-        for (const day of shuffledDays) {
+        // Sınıf anaokulu mu kontrol et
+        const classItem = classes.find(c => c.id === lesson.classId);
+        const isAnaokulu = classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
+        
+        // Günleri sırala - anaokulu için sabah saatlerini önceliklendir
+        const dayOrder = [...DAYS];
+        if (!isAnaokulu) {
+          // Anaokulu değilse günleri karıştır
+          dayOrder.sort(() => Math.random() - 0.5);
+        }
+        
+        for (const day of dayOrder) {
           if (lessonPlaced) break;
           
-          const shuffledPeriods = [...PERIODS].sort(() => Math.random() - 0.5);
+          // Periyotları sırala - anaokulu için sabah saatlerini önceliklendir
+          const periodOrder = [...PERIODS];
+          if (isAnaokulu) {
+            // Anaokulu için sabah saatlerini önceliklendir
+            periodOrder.sort((a, b) => {
+              const aNum = parseInt(a);
+              const bNum = parseInt(b);
+              if (isNaN(aNum) || isNaN(bNum)) return 0;
+              return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
+            });
+          } else {
+            // Anaokulu değilse periyotları karıştır
+            periodOrder.sort(() => Math.random() - 0.5);
+          }
           
-          for (const period of shuffledPeriods) {
+          for (const period of periodOrder) {
             // Öğretmen ve sınıf bu slotta müsait mi kontrol et
             const teacherSlot = teacherSchedule[day]?.[period];
             const classSlot = classSchedule[day]?.[period];
