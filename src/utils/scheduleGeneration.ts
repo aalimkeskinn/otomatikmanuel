@@ -13,13 +13,14 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
 }
 
 /**
- * "Öncelikli Kısıtlı Görev" Algoritması (v47 - Sınıf Öğretmeni Mutlak Önceliği Geliştirilmiş)
+ * "Öncelikli Kısıtlı Görev" Algoritması (v48 - Anaokulu Sınıf Öğretmeni Mutlak Önceliğiyle)
  * 1. Yoğun döngüleri asenkron hale getirerek tarayıcı kilitlenmelerini ve eklenti hatalarını önler.
  * 2. Öğretmenin rolüne göre günlük ders limitini uygular.
  * 3. Dersleri blok ve dağıtım şekillerine göre boşluklara dağıtır.
  * 4. İlkokul ve anaokulu sınıflarında sınıf öğretmenlerinin derslerini MUTLAK öncelikli olarak yerleştirir.
  * 5. Sınıf öğretmeni dersleri tamamen yerleştirilmeden diğer derslere geçilmez.
  * 6. Anaokulu sınıfları için özel optimizasyonlar içerir.
+ * 7. Anaokulu sınıfları için daha agresif yerleştirme stratejisi kullanır.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -31,7 +32,7 @@ export async function generateSystematicSchedule(
 ): Promise<EnhancedGenerationResult> {
   
   const startTime = Date.now();
-  console.log('🚀 Program oluşturma başlatıldı (v47 - Sınıf Öğretmeni Mutlak Önceliği Geliştirilmiş)...');
+  console.log('🚀 Program oluşturma başlatıldı (v48 - Anaokulu Sınıf Öğretmeni Mutlak Önceliğiyle)...');
 
   // AŞAMA 1: VERİ MATRİSLERİNİ VE GÖREVLERİ HAZIRLA
   const classScheduleGrids: { [classId: string]: Schedule['schedule'] } = {};
@@ -77,7 +78,7 @@ export async function generateSystematicSchedule(
     taskId: string; 
     isPlaced: boolean;
     priority: number; // Öncelik değeri: 0 = en yüksek (MUTLAK), 1 = çok yüksek, 5 = normal, 10 = düşük
-    retryCount: number; // Yeni: Yeniden deneme sayacı
+    retryCount: number; // Yeniden deneme sayacı
   };
   
   const allTasks: PlacementTask[] = [];
@@ -166,7 +167,7 @@ export async function generateSystematicSchedule(
   console.log(`🔝 MUTLAK ÖNCELİKLİ DERSLER: ${absolutePriorityTasks.length} ders`);
   
   // Mutlak öncelikli dersleri yerleştir
-  const maxAbsoluteAttempts = absolutePriorityTasks.length * 10; // Daha fazla deneme şansı
+  const maxAbsoluteAttempts = absolutePriorityTasks.length * 20; // Daha fazla deneme şansı
   let absoluteAttempts = 0;
   
   while (unplacedAbsoluteTasks.length > 0 && absoluteAttempts < maxAbsoluteAttempts) {
@@ -190,7 +191,7 @@ export async function generateSystematicSchedule(
     
     // Sınıf öğretmenleri için günlük ders limiti daha yüksek
     // Anaokulu için limiti daha da yükselt
-    const dailyLimit = classLevel === 'Anaokulu' ? 8 : 6; // Anaokulu için daha yüksek limit
+    const dailyLimit = classLevel === 'Anaokulu' ? 10 : 8; // Anaokulu için daha yüksek limit
     
     let placed = false;
     
@@ -220,19 +221,19 @@ export async function generateSystematicSchedule(
             
             // Blok için uygun ardışık periyotları bul
             for (let j = 0; j < blockLength; j++) {
-              const periodIndex = periodOrder.indexOf(PERIODS[i+j]);
-              if (periodIndex === -1) {
+              const periodIndex = i + j;
+              if (periodIndex >= periodOrder.length) {
                 isAvailable = false;
                 break;
               }
-              periodIndices.push(periodIndex);
+              const period = periodOrder[periodIndex];
+              periodIndices.push(period);
             }
             
             if (!isAvailable) continue;
             
             // Tüm periyotların uygunluğunu kontrol et
-            for (const periodIndex of periodIndices) {
-              const period = periodOrder[periodIndex];
+            for (const period of periodIndices) {
               const slotKey = `${day}-${period}`;
               
               // Slot zaten dolu mu kontrol et
@@ -253,8 +254,7 @@ export async function generateSystematicSchedule(
             
             if (isAvailable) {
                 // Tüm periyotlara yerleştir
-                for (const periodIndex of periodIndices) {
-                    const period = periodOrder[periodIndex];
+                for (const period of periodIndices) {
                     const slotKey = `${day}-${period}`;
                     classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
                     teacherAvailability.get(teacherId)!.add(slotKey);
@@ -278,7 +278,7 @@ export async function generateSystematicSchedule(
         task.retryCount++;
         
         // Yeniden deneme sayısını kontrol et
-        if (task.retryCount < 5) {
+        if (task.retryCount < 10) { // Daha fazla deneme şansı
           // Birkaç kez daha dene
           unplacedAbsoluteTasks.push(task);
         } else {
@@ -288,8 +288,8 @@ export async function generateSystematicSchedule(
           // Anaokulu sınıfları için özel durum - daha agresif yerleştirme
           const classItem = allClasses.find(c => c.id === task.mapping.classId);
           if (classItem && getEntityLevel(classItem) === 'Anaokulu') {
-            // Anaokulu için son bir şans daha ver
-            if (task.retryCount < 10) {
+            // Anaokulu için son bir şans daha ver - çok daha fazla deneme
+            if (task.retryCount < 20) {
               unplacedAbsoluteTasks.push(task);
             }
           }
@@ -377,19 +377,19 @@ export async function generateSystematicSchedule(
             
             // Blok için uygun ardışık periyotları bul
             for (let j = 0; j < blockLength; j++) {
-              const periodIndex = periodOrder.indexOf(PERIODS[i+j]);
-              if (periodIndex === -1) {
+              const periodIndex = i + j;
+              if (periodIndex >= periodOrder.length) {
                 isAvailable = false;
                 break;
               }
-              periodIndices.push(periodIndex);
+              const period = periodOrder[periodIndex];
+              periodIndices.push(period);
             }
             
             if (!isAvailable) continue;
             
             // Tüm periyotların uygunluğunu kontrol et
-            for (const periodIndex of periodIndices) {
-              const period = periodOrder[periodIndex];
+            for (const period of periodIndices) {
               const slotKey = `${day}-${period}`;
               
               // Slot zaten dolu mu kontrol et
@@ -410,8 +410,7 @@ export async function generateSystematicSchedule(
             
             if (isAvailable) {
                 // Tüm periyotlara yerleştir
-                for (const periodIndex of periodIndices) {
-                    const period = periodOrder[periodIndex];
+                for (const period of periodIndices) {
                     const slotKey = `${day}-${period}`;
                     classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
                     teacherAvailability.get(teacherId)!.add(slotKey);
