@@ -164,26 +164,28 @@ const ScheduleCompletionPage = () => {
       let remainingLessons = [...unassignedLessons];
       let placedCount = 0;
       
-      // Önce anaokulu derslerini yerleştir
+      // 1. Önce anaokulu derslerini yerleştir
       const anaokulLessons = remainingLessons.filter(lesson => {
         const classItem = classes.find(c => c.id === lesson.classId);
         return classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
       });
       
-      // Sonra sınıf öğretmeni derslerini yerleştir
+      // 2. Sonra sınıf öğretmeni derslerini yerleştir
       const classTeacherLessons = remainingLessons.filter(lesson => {
         if (anaokulLessons.includes(lesson)) return false;
         const classItem = classes.find(c => c.id === lesson.classId);
         return classItem && classItem.classTeacherId === lesson.teacherId;
       });
       
-      // Son olarak diğer dersleri yerleştir
+      // 3. Son olarak diğer dersleri yerleştir
       const otherLessons = remainingLessons.filter(lesson => 
         !anaokulLessons.includes(lesson) && !classTeacherLessons.includes(lesson)
       );
       
       // Önce anaokulu derslerini, sonra sınıf öğretmeni derslerini, en son diğer dersleri işle
       const processingOrder = [...anaokulLessons, ...classTeacherLessons, ...otherLessons];
+      
+      console.log(`🔄 Yerleştirilecek dersler: ${processingOrder.length} (Anaokulu: ${anaokulLessons.length}, Sınıf Öğretmeni: ${classTeacherLessons.length}, Diğer: ${otherLessons.length})`);
       
       // Her ders için tüm olası slotları kontrol et
       for (const lesson of processingOrder) {
@@ -237,6 +239,22 @@ const ScheduleCompletionPage = () => {
           } else {
             // Diğer öğretmenler için periyotları karıştır
             periodOrder.sort(() => Math.random() - 0.5);
+          }
+          
+          // Günlük ders sayısını kontrol et
+          let dailyCount = 0;
+          periodOrder.forEach(p => {
+            if (teacherSchedule[day]?.[p]?.classId === lesson.classId) {
+              dailyCount++;
+            }
+          });
+          
+          // Anaokulu ve sınıf öğretmenleri için günlük limit daha yüksek
+          const dailyLimit = isAnaokulu ? 12 : isClassTeacher ? 8 : 4;
+          
+          // Günlük limit aşıldıysa bu günü atla
+          if (dailyCount >= dailyLimit && !isAnaokulu) {
+            continue;
           }
           
           for (const period of periodOrder) {
