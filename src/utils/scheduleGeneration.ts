@@ -459,7 +459,7 @@ export async function generateSystematicSchedule(
         const countB = classTeacherDayCount.get(classId)!.get(b) || 0;
         return countA - countB;
       });
-    } else if (priority <= 2) {
+    } else if (task.priority <= 2) {
       // Sınıf öğretmenleri için günleri karıştırma, sırayla yerleştir
     } else {
       // Diğer öğretmenler için günleri karıştır
@@ -476,7 +476,7 @@ export async function generateSystematicSchedule(
 
         // Periyotları önceliklendirme - sınıf öğretmenleri için sabah saatlerini tercih et
         let periodOrder = [...PERIODS];
-        if (priority <= 2 && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
+        if (task.priority <= 2 && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
           // Sınıf öğretmenleri için sabah saatlerini önceliklendir
           periodOrder.sort((a, b) => {
             const aNum = parseInt(a);
