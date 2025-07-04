@@ -13,7 +13,7 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
 }
 
 /**
- * "Tam Kapsamlı Yerleştirme" Algoritması (v60 - Tamamen Yenilenmiş)
+ * "Tam Kapsamlı Yerleştirme" Algoritması (v55 - Tamamen Yenilenmiş)
  * 1. Yoğun döngüleri asenkron hale getirerek tarayıcı kilitlenmelerini ve eklenti hatalarını önler.
  * 2. Öğretmenin rolüne göre günlük ders limitini uygular.
  * 3. Dersleri blok ve dağıtım şekillerine göre boşluklara dağıtır.
@@ -31,9 +31,6 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
  * 15. Dağıtım şekli (distributionPattern) dikkate alınarak yerleştirme yapılır.
  * 16. Her sınıfın 45 saat ders alması hedeflenir.
  * 17. Her öğretmenin atanan ders saatlerinin doldurulması sağlanır.
- * 18. Sınıf bazında haftalık ders saati takibi yapılır.
- * 19. Öğretmen bazında haftalık ders saati takibi yapılır.
- * 20. Sınıf öğretmeni derslerini günlere dengeli dağıtmak için geliştirilmiş algoritma.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -45,7 +42,7 @@ export async function generateSystematicSchedule(
 ): Promise<EnhancedGenerationResult> {
   
   const startTime = Date.now();
-  console.log('🚀 Program oluşturma başlatıldı (v60 - Tam Kapsamlı Yerleştirme)...');
+  console.log('🚀 Program oluşturma başlatıldı (v55 - Tam Kapsamlı Yerleştirme)...');
 
   // AŞAMA 1: VERİ MATRİSLERİNİ VE GÖREVLERİ HAZIRLA
   const classScheduleGrids: { [classId: string]: Schedule['schedule'] } = {};
@@ -57,9 +54,6 @@ export async function generateSystematicSchedule(
   // Sınıf ve öğretmen bazında toplam ders saati takibi
   const classWeeklyHours = new Map<string, number>();
   const teacherWeeklyHours = new Map<string, number>();
-  
-  // Sınıf bazında ders saati hedefi
-  const CLASS_WEEKLY_HOURS_TARGET = 45;
 
   timeConstraints.forEach(c => { 
     if (c.constraintType) {
@@ -133,7 +127,6 @@ export async function generateSystematicSchedule(
       const distribution = parseDistributionPattern(subject.distributionPattern);
       if (distribution.length > 0 && distribution.reduce((a, b) => a + b, 0) === subject.weeklyHours) {
         subjectDistributions.set(subject.id, distribution);
-        console.log(`📊 Ders dağıtım şekli: ${subject.name} - ${subject.distributionPattern}`);
       }
     }
   });
@@ -466,7 +459,7 @@ export async function generateSystematicSchedule(
         const countB = classTeacherDayCount.get(classId)!.get(b) || 0;
         return countA - countB;
       });
-    } else if (task.priority <= 2) {
+    } else if (priority <= 2) {
       // Sınıf öğretmenleri için günleri karıştırma, sırayla yerleştir
     } else {
       // Diğer öğretmenler için günleri karıştır
@@ -483,7 +476,7 @@ export async function generateSystematicSchedule(
 
         // Periyotları önceliklendirme - sınıf öğretmenleri için sabah saatlerini tercih et
         let periodOrder = [...PERIODS];
-        if (task.priority <= 2 && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
+        if (priority <= 2 && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
           // Sınıf öğretmenleri için sabah saatlerini önceliklendir
           periodOrder.sort((a, b) => {
             const aNum = parseInt(a);
@@ -640,9 +633,9 @@ export async function generateSystematicSchedule(
   classWeeklyHours.forEach((hours, classId) => {
     const classItem = allClasses.find(c => c.id === classId);
     if (classItem) {
-      console.log(`${classItem.name}: ${hours} saat (hedef: ${CLASS_WEEKLY_HOURS_TARGET} saat)`);
-      if (hours < CLASS_WEEKLY_HOURS_TARGET) {
-        warnings.push(`${classItem.name} sınıfı için haftalık ders saati ${CLASS_WEEKLY_HOURS_TARGET}'in altında: ${hours} saat`);
+      console.log(`${classItem.name}: ${hours} saat (hedef: 45 saat)`);
+      if (hours < 45) {
+        warnings.push(`${classItem.name} sınıfı için haftalık ders saati 45'in altında: ${hours} saat`);
       }
     }
   });
