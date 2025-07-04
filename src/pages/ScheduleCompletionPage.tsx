@@ -205,37 +205,7 @@ const ScheduleCompletionPage = () => {
       const otherLessons = remainingLessons.filter(lesson => 
         !anaokulLessons.includes(lesson) && !classTeacherLessons.includes(lesson) && !nearTargetLessons.includes(lesson)
       );
-      const classTeacherLessons = remainingLessons.filter(lesson => {
-        if (anaokulLessons.includes(lesson)) return false;
-        const classItem = classes.find(c => c.id === lesson.classId);
-        return classItem && classItem.classTeacherId === lesson.teacherId;
-      });
       
-      // 3. Sonra 45 saate yaklaşan sınıfların derslerini yerleştir (üçüncü öncelik)
-      const classHours = new Map<string, number>();
-      workingSchedules.forEach(schedule => {
-        Object.values(schedule.schedule).forEach(day => {
-          Object.values(day).forEach(slot => {
-            if (slot?.classId && slot.classId !== 'fixed-period') {
-              classHours.set(slot.classId, (classHours.get(slot.classId) || 0) + 1);
-            }
-          });
-        });
-      });
-      
-      const nearTargetLessons = remainingLessons.filter(lesson => {
-        if (anaokulLessons.includes(lesson) || classTeacherLessons.includes(lesson)) return false;
-        const currentHours = classHours.get(lesson.classId) || 0;
-        return currentHours >= 35 && currentHours < 45; // 35-44 saat arası sınıflar
-      });
-      
-      // 4. Son olarak diğer dersleri yerleştir
-      const otherLessons = remainingLessons.filter(lesson => 
-        !anaokulLessons.includes(lesson) && !classTeacherLessons.includes(lesson) && !nearTargetLessons.includes(lesson)
-      );
-      
-      // Önce anaokulu derslerini, sonra sınıf öğretmeni derslerini, sonra 45 saate yaklaşan sınıfları, en son diğer dersleri işle
-      const processingOrder = [...anaokulLessons, ...classTeacherLessons, ...nearTargetLessons, ...otherLessons];
       // Önce anaokulu derslerini, sonra sınıf öğretmeni derslerini, sonra 45 saate yaklaşan sınıfları, en son diğer dersleri işle
       const processingOrder = [...anaokulLessons, ...classTeacherLessons, ...nearTargetLessons, ...otherLessons];
       
@@ -268,9 +238,6 @@ const ScheduleCompletionPage = () => {
         // Sınıf anaokulu mu kontrol et
         const classItem = classes.find(c => c.id === lesson.classId);
         const isAnaokulu = classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
-        const isClassTeacher = classItem && classItem.classTeacherId === lesson.teacherId;
-        const currentClassHours = classHours.get(lesson.classId) || 0;
-        const isNearTarget = currentClassHours >= 35 && currentClassHours < 45;
         const isClassTeacher = classItem && classItem.classTeacherId === lesson.teacherId;
         const currentClassHours = classHours.get(lesson.classId) || 0;
         const isNearTarget = currentClassHours >= 35 && currentClassHours < 45;
@@ -316,29 +283,12 @@ const ScheduleCompletionPage = () => {
             continue;
           }
           
-          // Günlük ders sayısını kontrol et
-          let dailyCount = 0;
-          periodOrder.forEach(p => {
-            if (teacherSchedule[day]?.[p]?.classId === lesson.classId) {
-              dailyCount++;
-            }
-          });
-          
-          // Anaokulu ve sınıf öğretmenleri için günlük limit daha yüksek
-          const dailyLimit = isAnaokulu ? 45 : isClassTeacher ? 12 : isNearTarget ? 8 : 4;
-
-          // Günlük limit aşıldıysa bu günü atla
-          if (dailyCount >= dailyLimit && !isAnaokulu) {
-            continue;
-          }
-          
           for (const period of periodOrder) {
             // Öğretmen ve sınıf bu slotta müsait mi kontrol et
             const teacherSlot = teacherSchedule[day]?.[period];
             const classSlot = classSchedule[day]?.[period];
             
             if (!teacherSlot && !classSlot) {
-              // Slot boş, dersi yerleştir
               // Slot boş, dersi yerleştir
               assignLessonToSlot(lesson, day, period);
               
@@ -352,9 +302,6 @@ const ScheduleCompletionPage = () => {
               
               placedCount++;
               lessonPlaced = true;
-              
-              // Sınıf saatlerini güncelle
-              classHours.set(lesson.classId, (classHours.get(lesson.classId) || 0) + 1);
               
               // Sınıf saatlerini güncelle
               classHours.set(lesson.classId, (classHours.get(lesson.classId) || 0) + 1);
