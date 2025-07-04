@@ -149,7 +149,7 @@ const ScheduleCompletionPage = () => {
     });
   };
 
-  // YENİ: Otomatik yerleştirme fonksiyonu
+  // Otomatik yerleştirme fonksiyonu
   const handleAutoPlacement = async () => {
     if (unassignedLessons.length === 0) {
       warning("Yerleştirilecek Ders Yok", "Tüm dersler zaten yerleştirilmiş.");
@@ -170,10 +170,20 @@ const ScheduleCompletionPage = () => {
         return classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
       });
       
-      const otherLessons = remainingLessons.filter(lesson => !anaokulLessons.includes(lesson));
+      // Sonra sınıf öğretmeni derslerini yerleştir
+      const classTeacherLessons = remainingLessons.filter(lesson => {
+        if (anaokulLessons.includes(lesson)) return false;
+        const classItem = classes.find(c => c.id === lesson.classId);
+        return classItem && classItem.classTeacherId === lesson.teacherId;
+      });
       
-      // Önce anaokulu derslerini, sonra diğer dersleri işle
-      const processingOrder = [...anaokulLessons, ...otherLessons];
+      // Son olarak diğer dersleri yerleştir
+      const otherLessons = remainingLessons.filter(lesson => 
+        !anaokulLessons.includes(lesson) && !classTeacherLessons.includes(lesson)
+      );
+      
+      // Önce anaokulu derslerini, sonra sınıf öğretmeni derslerini, en son diğer dersleri işle
+      const processingOrder = [...anaokulLessons, ...classTeacherLessons, ...otherLessons];
       
       // Her ders için tüm olası slotları kontrol et
       for (const lesson of processingOrder) {
@@ -202,21 +212,22 @@ const ScheduleCompletionPage = () => {
         // Sınıf anaokulu mu kontrol et
         const classItem = classes.find(c => c.id === lesson.classId);
         const isAnaokulu = classItem && (classItem.level === 'Anaokulu' || (classItem.levels || []).includes('Anaokulu'));
+        const isClassTeacher = classItem && classItem.classTeacherId === lesson.teacherId;
         
-        // Günleri sırala - anaokulu için sabah saatlerini önceliklendir
+        // Günleri sırala - anaokulu ve sınıf öğretmenleri için sabah saatlerini önceliklendir
         const dayOrder = [...DAYS];
-        if (!isAnaokulu) {
-          // Anaokulu değilse günleri karıştır
+        if (!isAnaokulu && !isClassTeacher) {
+          // Anaokulu veya sınıf öğretmeni değilse günleri karıştır
           dayOrder.sort(() => Math.random() - 0.5);
         }
         
         for (const day of dayOrder) {
           if (lessonPlaced) break;
           
-          // Periyotları sırala - anaokulu için sabah saatlerini önceliklendir
+          // Periyotları sırala - anaokulu ve sınıf öğretmenleri için sabah saatlerini önceliklendir
           const periodOrder = [...PERIODS];
-          if (isAnaokulu) {
-            // Anaokulu için sabah saatlerini önceliklendir
+          if (isAnaokulu || isClassTeacher) {
+            // Anaokulu ve sınıf öğretmenleri için sabah saatlerini önceliklendir
             periodOrder.sort((a, b) => {
               const aNum = parseInt(a);
               const bNum = parseInt(b);
@@ -224,7 +235,7 @@ const ScheduleCompletionPage = () => {
               return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
             });
           } else {
-            // Anaokulu değilse periyotları karıştır
+            // Diğer öğretmenler için periyotları karıştır
             periodOrder.sort(() => Math.random() - 0.5);
           }
           
@@ -398,7 +409,7 @@ const ScheduleCompletionPage = () => {
             </span>
           </div>
 
-          {/* YENİ: Otomatik Yerleştirme Butonu */}
+          {/* Otomatik Yerleştirme Butonu */}
           {filteredUnassignedLessons.length > 0 && (
             <div className="mb-2">
               <Button
