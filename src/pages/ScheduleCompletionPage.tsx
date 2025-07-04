@@ -164,7 +164,6 @@ const ScheduleCompletionPage = () => {
       let remainingLessons = [...unassignedLessons];
       let placedCount = 0;
       let totalMissingHours = remainingLessons.reduce((sum, lesson) => sum + lesson.missingHours, 0);
-      let totalMissingHours = remainingLessons.reduce((sum, lesson) => sum + lesson.missingHours, 0);
       
       console.log(`🔄 Toplam yerleştirilecek: ${remainingLessons.length} ders (${totalMissingHours} saat)`);
       
