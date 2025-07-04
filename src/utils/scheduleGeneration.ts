@@ -13,7 +13,7 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
 }
 
 /**
- * "Anaokulu Öncelikli Yerleştirme" Algoritması (v52 - Tamamen Yenilenmiş)
+ * "Anaokulu Öncelikli Yerleştirme" Algoritması (v53 - Tamamen Yenilenmiş)
  * 1. Yoğun döngüleri asenkron hale getirerek tarayıcı kilitlenmelerini ve eklenti hatalarını önler.
  * 2. Öğretmenin rolüne göre günlük ders limitini uygular.
  * 3. Dersleri blok ve dağıtım şekillerine göre boşluklara dağıtır.
@@ -26,6 +26,8 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
  * 10. Yerleştirilemeyen dersler için daha fazla deneme şansı verir.
  * 11. Anaokulu sınıfları için özel yerleştirme stratejisi - tüm saatleri dener.
  * 12. Sınıf öğretmeni derslerini daha dengeli dağıtmak için geliştirilmiş algoritma.
+ * 13. Anaokulu sınıfları için günlük ders limiti tamamen kaldırıldı.
+ * 14. Anaokulu sınıfları için çok daha agresif yerleştirme stratejisi.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -37,7 +39,7 @@ export async function generateSystematicSchedule(
 ): Promise<EnhancedGenerationResult> {
   
   const startTime = Date.now();
-  console.log('🚀 Program oluşturma başlatıldı (v52 - Anaokulu Öncelikli Yerleştirme)...');
+  console.log('🚀 Program oluşturma başlatıldı (v53 - Anaokulu Öncelikli Yerleştirme)...');
 
   // AŞAMA 1: VERİ MATRİSLERİNİ VE GÖREVLERİ HAZIRLA
   const classScheduleGrids: { [classId: string]: Schedule['schedule'] } = {};
@@ -193,7 +195,7 @@ export async function generateSystematicSchedule(
   console.log(`🔝 MUTLAK ÖNCELİKLİ DERSLER: ${absolutePriorityTasks.length} ders`);
   
   // Mutlak öncelikli dersleri yerleştir
-  const maxAbsoluteAttempts = absolutePriorityTasks.length * 100; // Çok daha fazla deneme şansı
+  const maxAbsoluteAttempts = absolutePriorityTasks.length * 200; // Çok daha fazla deneme şansı
   let absoluteAttempts = 0;
   
   // Günlere dengeli dağıtım için sayaç
@@ -231,7 +233,7 @@ export async function generateSystematicSchedule(
     
     // Sınıf öğretmenleri için günlük ders limiti daha yüksek
     // Anaokulu için limiti daha da yükselt
-    const dailyLimit = isAnaokulu ? 20 : 10; // Anaokulu için çok daha yüksek limit
+    const dailyLimit = isAnaokulu ? 30 : 10; // Anaokulu için çok daha yüksek limit
     
     let placed = false;
     
@@ -253,7 +255,7 @@ export async function generateSystematicSchedule(
         // YENİ: Günlük ders sayısını kontrol et, ama anaokulu için daha esnek ol
         const currentDailyCount = dailyLessonCount.get(classId)?.get(day)?.get(subjectId) || 0;
         
-        // YENİ: Anaokulu için günlük limit kontrolünü gevşet
+        // YENİ: Anaokulu için günlük limit kontrolünü tamamen kaldır
         if (!isAnaokulu && (currentDailyCount + blockLength) > dailyLimit) {
             continue;
         }
@@ -267,7 +269,7 @@ export async function generateSystematicSchedule(
           return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
         });
 
-        // YENİ: Anaokulu için tüm olası başlangıç noktalarını dene, hiçbirini atlama
+        // YENİ: Anaokulu için çok daha agresif yerleştirme - tüm olası başlangıç noktalarını dene
         for (let i = 0; i <= periodOrder.length - blockLength; i++) {
             let isAvailable = true;
             const periodsToUse = [];
@@ -332,7 +334,7 @@ export async function generateSystematicSchedule(
         task.retryCount++;
         
         // Yeniden deneme sayısını kontrol et
-        if (task.retryCount < 50) { // Daha fazla deneme şansı - özellikle anaokulu için
+        if (task.retryCount < 50) { // Daha fazla deneme şansı
           // Birkaç kez daha dene
           unplacedAbsoluteTasks.push(task);
         } else {
@@ -342,7 +344,7 @@ export async function generateSystematicSchedule(
           // Anaokulu sınıfları için özel durum - daha agresif yerleştirme
           if (isAnaokulu) {
             // Anaokulu için son bir şans daha ver - çok daha fazla deneme
-            if (task.retryCount < 100) {
+            if (task.retryCount < 150) {
               unplacedAbsoluteTasks.push(task);
             }
           }
@@ -364,7 +366,7 @@ export async function generateSystematicSchedule(
 
   console.log(`📚 NORMAL ÖNCELİKLİ DERSLER: ${regularTasks.length} ders`);
   
-  const maxAttempts = allTasks.length * 20; // Daha fazla deneme şansı
+  const maxAttempts = allTasks.length * 30; // Daha fazla deneme şansı
   let attempts = 0;
 
   while (unplacedTasks.length > 0 && attempts < maxAttempts) {
@@ -389,7 +391,7 @@ export async function generateSystematicSchedule(
     const isAnaokulu = classLevel === 'Anaokulu';
     
     // Günlük ders limiti - sınıf öğretmenleri için daha yüksek
-    const dailyLimit = isAnaokulu ? 20 : // Anaokulu için çok daha yüksek limit
+    const dailyLimit = isAnaokulu ? 30 : // Anaokulu için çok daha yüksek limit
                       (isClassTeacher && classLevel === 'İlkokul') ? 10 : // İlkokul sınıf öğretmeni
                       (isSinifOgretmenligi ? 6 : 3); // Diğer öğretmenler
 
@@ -414,7 +416,7 @@ export async function generateSystematicSchedule(
     }
     
     for (const day of dayOrder) {
-        // YENİ: Anaokulu için günlük limit kontrolünü gevşet
+        // YENİ: Anaokulu için günlük limit kontrolünü tamamen kaldır
         const currentDailyCount = dailyLessonCount.get(classId)?.get(day)?.get(subjectId) || 0;
         
         if (!isAnaokulu && (currentDailyCount + blockLength) > dailyLimit) {
@@ -500,7 +502,7 @@ export async function generateSystematicSchedule(
         task.retryCount++;
         
         // Yeniden deneme sayısını kontrol et
-        const maxRetries = isAnaokulu ? 50 : 15; // Anaokulu için daha fazla deneme
+        const maxRetries = isAnaokulu ? 100 : 20; // Anaokulu için daha fazla deneme
         
         if (task.retryCount < maxRetries) {
           // Birkaç kez daha dene
