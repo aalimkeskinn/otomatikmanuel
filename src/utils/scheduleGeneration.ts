@@ -514,7 +514,11 @@ export async function generateSystematicSchedule(
       
       // Günlere dengeli dağıtım için sayaç
       const dayCount = new Map<string, number>();
-      DAYS.forEach(day => dayCount.set(day, 0));
+      D
+      )
+    }
+  }
+}AYS.forEach(day => dayCount.set(day, 0));
       
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
