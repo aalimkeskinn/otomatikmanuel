@@ -7,9 +7,6 @@ import { TimeConstraint } from '../types/constraints';
 // Tarayıcının arayüzü güncellemesine ve diğer işleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
 const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// Tarayıcının arayüzü güncellemesine ve diğer işleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
-const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
-
 const LEVEL_ORDER: Record<'Anaokulu' | 'İlkokul' | 'Ortaokul', number> = { 'Anaokulu': 1, 'İlkokul': 2, 'Ortaokul': 3 };
 function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ortaokul' {
     return (entity as any).level || (entity as any).levels?.[0] || 'İlkokul';
@@ -514,11 +511,7 @@ export async function generateSystematicSchedule(
       
       // Günlere dengeli dağıtım için sayaç
       const dayCount = new Map<string, number>();
-      D
-      )
-    }
-  }
-}AYS.forEach(day => dayCount.set(day, 0));
+      DAYS.forEach(day => dayCount.set(day, 0));
       
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
