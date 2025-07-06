@@ -102,8 +102,7 @@ export async function generateSystematicSchedule(
       classWeeklyHours.set(classItem.id, 0); // Sınıf için haftalık ders saati sayacı
       // Anaokulu için limit yok, ilkokul için 12, ortaokul için 10
       classMaxDailyHours.set(classItem.id, 
-        getEntityLevel(classItem) === 'Anaokulu' ? 45 : 
-        getEntityLevel(classItem) === 'İlkokul' ? 12 : 10
+        getEntityLevel(classItem) === 'Anaokulu' ? 45 : 9 // Her sınıfın günlük 9 ders limiti var
       );
       classTargetHours.set(classItem.id, 45); // Her sınıf için hedef 45 saat
       
@@ -448,8 +447,8 @@ export async function generateSystematicSchedule(
           // Günlük ders sayısını kontrol et
           const currentDailyCount = dayCount.get(day) || 0;
           
-          // Günlük limit - eğitim seviyesine göre
-          const dailyLimit = level === 'Anaokulu' ? 45 : level === 'İlkokul' ? 12 : 8;
+          // Günlük limit - her sınıf için 9 ders
+          const dailyLimit = level === 'Anaokulu' ? 45 : 9;
           
           // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
           if (currentDailyCount >= dailyLimit && level !== 'Anaokulu') {
@@ -574,8 +573,8 @@ export async function generateSystematicSchedule(
           // Günlük ders sayısını kontrol et
           const currentDailyCount = dayCount.get(day) || 0;
           
-          // Günlük limit - eğitim seviyesine göre
-          const dailyLimit = level === 'Anaokulu' ? 45 : level === 'İlkokul' ? 10 : 8;
+          // Günlük limit - her sınıf için 9 ders
+          const dailyLimit = level === 'Anaokulu' ? 45 : 9;
           
           // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
           if (currentDailyCount >= dailyLimit && level !== 'Anaokulu') {
