@@ -516,7 +516,13 @@ export async function generateSystematicSchedule(
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
         
-        const { mapping, blockLength, distributionDay } = task;
+        const { mapping, blockLength, distr
+        )
+      }
+      )
+    }
+  }
+}ibutionDay } = task;
         const { teacherId, classId, subjectId } = mapping;
         
         // Günleri dengeli dağıtım için sırala
