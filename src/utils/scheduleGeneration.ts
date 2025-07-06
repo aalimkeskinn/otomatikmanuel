@@ -15,30 +15,20 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
 /**
  * "Hedef Odaklı Yerleştirme" Algoritması (v57 - Tamamen Yenilenmiş)
  * 1. Yoğun döngüleri asenkron hale getirerek tarayıcı kilitlenmelerini ve eklenti hatalarını önler.
- * 2. Öğretmenin rolüne göre günlük ders limitini uygular.
- * 3. Dersleri blok ve dağıtım şekillerine göre boşluklara dağıtır.
- * 4. İlkokul ve anaokulu sınıflarında sınıf öğretmenlerinin derslerini MUTLAK öncelikli olarak yerleştirir.
- * 5. Sınıf öğretmeni dersleri tamamen yerleştirilmeden diğer derslere geçilmez.
- * 6. Anaokulu sınıfları için özel optimizasyonlar içerir.
- * 7. Anaokulu sınıfları için daha agresif yerleştirme stratejisi kullanır.
- * 8. Sınıf öğretmeni derslerini günlere dengeli dağıtır.
- * 9. Anaokulu sınıflarında sabah saatlerini önceliklendirir.
- * 10. Yerleştirilemeyen dersler için daha fazla deneme şansı verir.
- * 11. Anaokulu sınıfları için özel yerleştirme stratejisi - tüm saatleri dener.
- * 12. Sınıf öğretmeni derslerini daha dengeli dağıtmak için geliştirilmiş algoritma.
- * 13. Anaokulu sınıfları için günlük ders limiti tamamen kaldırıldı.
- * 14. Anaokulu sınıfları için çok daha agresif yerleştirme stratejisi.
- * 15. Dağıtım şekli (distributionPattern) dikkate alınarak yerleştirme yapılır.
- * 16. Her sınıfın 45 saat ders alması hedeflenir.
- * 17. Her öğretmenin atanan ders saatlerinin doldurulması sağlanır.
- * 18. Sınıf bazında 45 saat hedefine ulaşmak için daha agresif yerleştirme.
- * 19. Öğretmen bazında hedef ders saatine ulaşmak için daha akıllı yerleştirme.
- * 20. Yerleştirme sonrası detaylı istatistikler ve uyarılar.
- * 21. Yerleştirme algoritması iyileştirildi - daha fazla ders yerleştirilebiliyor.
- * 22. Çakışma kontrolü daha akıllı hale getirildi - daha az çakışma.
- * 23. Günlük ders limitleri daha esnek hale getirildi.
- * 24. Yerleştirme denemesi sayısı artırıldı.
- * 25. Yerleştirme öncelikleri daha akıllı hale getirildi.
+ * 2. EĞİTİM SEVİYESİ BAZLI İLERLEME - Sınıf bazlı değil, eğitim seviyesi bazlı ilerler.
+ * 3. SINIF BAZLI TAMAMLAMA - Bir sınıfın dersleri bitmeden diğer sınıfa geçilmez.
+ * 4. HEDEF DOLDURMA - Sınıf ve öğretmen hedef saatlerini doldurmak için optimizasyon yapar.
+ * 5. KULÜP DERSLERİ OTOMATİK ATAMA - Ortaokul için Perşembe 7-8, İlkokul için 9-10. saatlere otomatik atar.
+ * 6. SINIF ÖĞRETMENİ ÖNCELİĞİ - Sınıf öğretmeni dersleri her zaman önce yerleştirilir.
+ * 7. ANAOKULU ÖNCELİĞİ - Anaokulu sınıfları her zaman ilk sırada yerleştirilir.
+ * 8. SABAH SAATLERİ ÖNCELİĞİ - Anaokulu ve ilkokul için sabah saatleri önceliklendirilir.
+ * 9. GÜNLÜK DERS LİMİTLERİ - Eğitim seviyesine göre günlük ders limitleri uygulanır.
+ * 10. DENGELİ DAĞITIM - Dersler günlere dengeli dağıtılır.
+ * 11. BLOK YERLEŞTİRME - Dersler blok halinde yerleştirilebilir.
+ * 12. DAĞITIM ŞEKLİ - Derslerin dağıtım şekli (distributionPattern) dikkate alınır.
+ * 13. 45 SAAT HEDEFİ - Her sınıfın 45 saat ders alması hedeflenir.
+ * 14. ÖĞRETMEN YÜKÜ - Her öğretmenin atanan ders saatlerinin doldurulması sağlanır.
+ * 15. DETAYLI İSTATİSTİKLER - Yerleştirme sonrası detaylı istatistikler ve uyarılar üretilir.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -59,6 +49,12 @@ export async function generateSystematicSchedule(
   const constraintMap = new Map<string, string>();
   const dailyLessonCount = new Map<string, Map<string, Map<string, number>>>();
   
+  // Kulüp dersleri için özel slotlar
+  const clubSlots = {
+    'Ortaokul': { day: 'Perşembe', periods: ['7', '8'] },
+    'İlkokul': { day: 'Perşembe', periods: ['9', '10'] }
+  };
+  
   // Sınıf ve öğretmen bazında toplam ders saati takibi
   const classWeeklyHours = new Map<string, number>(); // Yerleştirilen ders saatleri
   const teacherWeeklyHours = new Map<string, number>(); // Yerleştirilen ders saatleri
@@ -72,6 +68,13 @@ export async function generateSystematicSchedule(
   // Sınıf bazında günlük ders saati limitleri
   const classMaxDailyHours = new Map<string, number>();
 
+  // Eğitim seviyesi bazında sınıfları grupla
+  const classesByLevel = {
+    'Anaokulu': [] as Class[],
+    'İlkokul': [] as Class[],
+    'Ortaokul': [] as Class[]
+  };
+
   timeConstraints.forEach(c => { 
     if (c.constraintType) {
       constraintMap.set(`${c.entityType}-${c.entityId}-${c.day}-${c.period}`, c.constraintType); 
@@ -81,6 +84,10 @@ export async function generateSystematicSchedule(
   const selectedClassIds = new Set(mappings.map(m => m.classId));
   allClasses.forEach(classItem => {
     if (selectedClassIds.has(classItem.id)) {
+      // Eğitim seviyesine göre sınıfı grupla
+      const level = getEntityLevel(classItem);
+      classesByLevel[level].push(classItem);
+      
       classScheduleGrids[classItem.id] = {};
       classAvailability.set(classItem.id, new Set<string>());
       dailyLessonCount.set(classItem.id, new Map<string, Map<string, number>>());
@@ -157,10 +164,19 @@ export async function generateSystematicSchedule(
   
   const allTasks: PlacementTask[] = [];
 
+  // Kulüp derslerini belirle
+  const clubSubjectIds = new Set<string>();
+  allSubjects.forEach(subject => {
+    if (subject.name.toLowerCase().includes('kulüp')) {
+      clubSubjectIds.add(subject.id);
+      console.log(`🎭 Kulüp dersi tespit edildi: ${subject.name}`);
+    }
+  });
+  
   // Sınıf öğretmenlerini ve derslerini belirle
   console.log('👨‍🏫 Sınıf öğretmenleri:');
   allClasses.filter(c => c.classTeacherId).forEach(c => console.log(`${c.name}: ${allTeachers.find(t => t.id === c.classTeacherId)?.name || 'Bilinmeyen'}`));
-  
+
   const classTeacherMap = new Map<string, string>(); // classId -> teacherId
   allClasses.forEach(classItem => {
     if (classItem.classTeacherId) {
@@ -196,6 +212,7 @@ export async function generateSystematicSchedule(
   mappings.forEach(mapping => {
     let hoursLeft = mapping.weeklyHours;
     const subject = allSubjects.find(s => s.id === mapping.subjectId);
+    const isClubSubject = subject && clubSubjectIds.has(subject.id);
 
     // Dağıtım şekli kontrolü
     let distribution: number[] = [];
@@ -216,6 +233,11 @@ export async function generateSystematicSchedule(
     // Öncelik değerini belirle
     let priority = 5; // Varsayılan öncelik
     let classTargetPriority = 5; // Varsayılan sınıf hedef önceliği
+
+    // Kulüp dersleri için özel öncelik
+    if (isClubSubject) {
+      priority = 2; // Kulüp dersleri için yüksek öncelik
+    }
     
     if (teacher && classItem) {
       const classLevel = getEntityLevel(classItem);
@@ -278,13 +300,12 @@ export async function generateSystematicSchedule(
     if (a.priority !== b.priority) {
       return a.priority - b.priority;
     }
-    // Aynı öncelikte ise blok uzunluğuna göre sırala (uzun bloklar önce)
+    // 2. Sınıf hedef önceliğine göre sırala (45 saate yaklaşan sınıflar önce)
+    if (a.classTargetPriority !== b.classTargetPriority) {
+      return a.classTargetPriority - b.classTargetPriority;
+    }
+    // 3. Aynı öncelikte ise blok uzunluğuna göre sırala (uzun bloklar önce)
     return b.blockLength - a.blockLength;
-  });
-  
-  // Sınıf hedef önceliğine göre tekrar sırala (45 saate yaklaşan sınıflar önce)
-  allTasks.sort((a, b) => {
-    return a.classTargetPriority - b.classTargetPriority;
   });
   
   console.log('📊 Görev önceliklendirmesi:', {
@@ -299,6 +320,67 @@ export async function generateSystematicSchedule(
   allTasks.forEach(task => {
     tasksByClass.set(task.mapping.classId, (tasksByClass.get(task.mapping.classId) || 0) + 1);
   });
+  
+  // AŞAMA 2: KULÜP DERSLERİNİ OTOMATİK YERLEŞTIR
+  console.log('🎭 Kulüp derslerini otomatik yerleştirme başlatılıyor...');
+  
+  // Kulüp dersleri için görevleri bul
+  const clubTasks = allTasks.filter(task => {
+    const subject = allSubjects.find(s => s.id === task.mapping.subjectId);
+    return subject && clubSubjectIds.has(subject.id);
+  });
+  
+  // Her kulüp dersi için
+  for (const task of clubTasks) {
+    const { mapping } = task;
+    const { teacherId, classId, subjectId } = mapping;
+    const classItem = allClasses.find(c => c.id === classId);
+    if (!classItem) continue;
+    
+    const classLevel = getEntityLevel(classItem);
+    if (classLevel !== 'İlkokul' && classLevel !== 'Ortaokul') continue;
+    
+    // Kulüp dersi için uygun slotları belirle
+    const slots = clubSlots[classLevel];
+    if (!slots) continue;
+    
+    const { day, periods } = slots;
+    
+    // Her periyot için dene
+    for (const period of periods) {
+      // Slot zaten dolu mu kontrol et
+      if (classScheduleGrids[classId][day][period] !== undefined && 
+          classScheduleGrids[classId][day][period] !== null) {
+        continue;
+      }
+      
+      const slotKey = `${day}-${period}`;
+      if (teacherAvailability.get(teacherId)?.has(slotKey) || 
+          classAvailability.get(classId)?.has(slotKey) || 
+          constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
+          constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
+        continue;
+      }
+      
+      // Kulüp dersini yerleştir
+      classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+      teacherAvailability.get(teacherId)!.add(slotKey);
+      classAvailability.get(classId)!.add(slotKey);
+      
+      // Haftalık ders saati sayaçlarını güncelle
+      classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
+      teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
+      
+      // Yerleştirilen ders sayısını güncelle
+      mapping.assignedHours++;
+      task.isPlaced = true;
+      
+      console.log(`✅ Kulüp dersi otomatik yerleştirildi: ${classItem.name} - ${day} ${period}. ders`);
+      
+      // Bir ders saati yerleştirdik, sonraki derse geç
+      break;
+    }
+  })
   
   // AŞAMA 2: ANAOKULU SINIFLARINI ÖNCE İŞLE
   const anaokulTasks = allTasks.filter(t => {
@@ -330,269 +412,162 @@ export async function generateSystematicSchedule(
       });
     }
   });
+  // AŞAMA 3: EĞİTİM SEVİYESİ BAZLI YERLEŞTİRME
+  console.log('🏫 Eğitim seviyesi bazlı yerleştirme başlatılıyor...');
   
-  while (unplacedAbsoluteTasks.length > 0 && absoluteAttempts < maxAbsoluteAttempts) {
-    const task = unplacedAbsoluteTasks.shift()!;
-    absoluteAttempts++;
+  // Eğitim seviyesi sıralaması: Anaokulu -> İlkokul -> Ortaokul
+  const levelOrder = ['Anaokulu', 'İlkokul', 'Ortaokul'] as const;
+  
+  // Yerleştirilen görev sayısı
+  let placedTasksCount = 0;
+  
+  // Her eğitim seviyesi için
+  for (const level of levelOrder) {
+    console.log(`🏫 ${level} seviyesi işleniyor...`);
+    const classesInLevel = classesByLevel[level];
     
-    // Her 20 denemede bir, tarayıcının diğer işleri yapmasına izin ver.
-    if (absoluteAttempts % 20 === 0) {
-      await yieldToMainThread();
-    }
-
-    const { mapping, blockLength, distributionDay } = task;
-    const { teacherId, classId, subjectId } = mapping;
-    const teacher = allTeachers.find(t => t.id === teacherId);
-    const classItem = allClasses.find(c => c.id === classId);  
-    const subject = allSubjects.find(s => s.id === subjectId);
-
-    if (!teacher || !classItem || !subject) continue;
-    
-    // Sınıf seviyesini kontrol et
-    const classLevel = getEntityLevel(classItem);
-    const isAnaokulu = classLevel === 'Anaokulu';
-    
-    // Sınıf öğretmenleri için günlük ders limiti daha yüksek
-    // Anaokulu için limiti tamamen kaldır, ilkokul için 12, ortaokul için 10
-    const dailyLimit = isAnaokulu ? 45 : classLevel === 'İlkokul' ? 12 : 10;
-    
-    let placed = false;
-    
-    // Günleri dengeli dağıtım için sırala
-    let dayOrder = [...DAYS];
-    
-    // Dağıtım şekli varsa, belirli bir gün için yerleştirme yap (önemli!)
-    if (distributionDay !== undefined && distributionDay < dayOrder.length) {
-      // Sadece belirtilen günü kullan
-      dayOrder = [dayOrder[distributionDay]];
-    }
-    // Anaokulu sınıfları için günleri dengeli dağıtmak için sırala
-    else if (isAnaokulu && classTeacherDayCount.has(classId)) {
-      // Günleri, o güne atanan ders sayısına göre sırala (az olan önce)
-      dayOrder.sort((a, b) => {
-        const countA = classTeacherDayCount.get(classId)!.get(a) || 0;
-        const countB = classTeacherDayCount.get(classId)!.get(b) || 0;
-        return countA - countB;
+    // Her sınıf için
+    for (const classItem of classesInLevel) {
+      console.log(`📚 ${classItem.name} sınıfı işleniyor...`);
+      
+      // Bu sınıfa ait görevleri bul
+      const classTasks = allTasks.filter(t => 
+        t.mapping.classId === classItem.id && !t.isPlaced
+      );
+      
+      if (classTasks.length === 0) {
+        console.log(`ℹ️ ${classItem.name} sınıfı için yerleştirilecek ders yok, sonraki sınıfa geçiliyor.`);
+        continue;
+      }
+      
+      // Sınıf öğretmeni görevlerini önce yerleştir
+      const classTeacherTasks = classTasks.filter(t => 
+        classItem.classTeacherId === t.mapping.teacherId
+      );
+      
+      // Kulüp dersleri
+      const classClubTasks = classTasks.filter(t => {
+        const subject = allSubjects.find(s => s.id === t.mapping.subjectId);
+        return subject && clubSubjectIds.has(subject.id);
       });
-    }
-    
-    // Tüm günleri dene, hiçbir günü atlamadan
-    for (const day of dayOrder) {
-        // YENİ: Günlük ders sayısını kontrol et, ama anaokulu için daha esnek ol
-        const currentDailyCount = dailyLessonCount.get(classId)?.get(day)?.get(subjectId) || 0;
+      
+      // Diğer görevler
+      const otherClassTasks = classTasks.filter(t => 
+        !classTeacherTasks.includes(t) && !classClubTasks.includes(t)
+      );
+      
+      // Önce kulüp derslerini yerleştir
+      for (const task of classClubTasks) {
+        if (task.isPlaced) continue;
         
-        // YENİ: Anaokulu için günlük limit kontrolünü tamamen kaldır
-        if (!isAnaokulu && (currentDailyCount + blockLength) > dailyLimit) {
+        const { mapping, blockLength } = task;
+        const { teacherId, classId, subjectId } = mapping;
+        
+        // Kulüp dersleri için uygun slotlar
+        const slots = clubSlots[level as 'İlkokul' | 'Ortaokul'];
+        if (!slots) continue;
+        
+        const { day, periods } = slots;
+        
+        // Her periyot için dene
+        for (const period of periods) {
+          // Slot zaten dolu mu kontrol et
+          if (classScheduleGrids[classId][day][period] !== undefined && 
+              classScheduleGrids[classId][day][period] !== null) {
             continue;
-        }
-
-        // Periyotları sırayla dene (sabah saatlerini önceliklendir - özellikle anaokulu için)
-        let periodOrder = [...PERIODS];
-        periodOrder.sort((a, b) => {
-          const aNum = parseInt(a);
-          const bNum = parseInt(b);
-          if (isNaN(aNum) || isNaN(bNum)) return 0;
-          return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
-        });
-
-        // Anaokulu için çok daha agresif yerleştirme - tüm olası başlangıç noktalarını dene
-        for (let i = 0; i <= periodOrder.length - blockLength; i++) {
-            let isAvailable = true;
-            const periodsToUse = [];
-            
-            // Blok için uygun ardışık periyotları bul
-            for (let j = 0; j < blockLength; j++) {
-              const periodIndex = i + j;
-              if (periodIndex >= periodOrder.length) {
-                isAvailable = false;
-                break;
-              }
-              const period = periodOrder[periodIndex];
-              
-              // Slot zaten dolu mu kontrol et
-              if (classScheduleGrids[classId][day][period] !== undefined && 
-                  classScheduleGrids[classId][day][period] !== null) {
-                isAvailable = false;
-                break;
-              }
-              
-              const slotKey = `${day}-${period}`;
-              if (teacherAvailability.get(teacherId)?.has(slotKey) || 
-                  classAvailability.get(classId)?.has(slotKey) || 
-                  constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
-                  constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
-                isAvailable = false;
-                break;
-              }
-              
-              periodsToUse.push(period);
-            }
-            
-            if (isAvailable && periodsToUse.length === blockLength) {
-                // Tüm periyotlara yerleştir
-                for (const period of periodsToUse) {
-                    const slotKey = `${day}-${period}`;
-                    classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
-                    teacherAvailability.get(teacherId)!.add(slotKey);
-                    classAvailability.get(classId)!.add(slotKey);
-                    
-                    // Haftalık ders saati sayaçlarını güncelle
-                    classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
-                    teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
-                    
-                    // Yerleştirme detayını logla
-                    console.log(`✅ Yerleştirildi: ${classItem.name} - ${subject.name} - ${teacher.name} - ${day} ${period}. ders`);
-                }
-                
-                // Günlük ders sayısını güncelle
-                const dayCountMap = dailyLessonCount.get(classId)!.get(day)!;
-                dayCountMap.set(subjectId, (dayCountMap.get(subjectId) || 0) + blockLength);
-                
-                // Sınıf öğretmeni gün sayacını güncelle
-                if (classTeacherDayCount.has(classId)) {
-                  const currentCount = classTeacherDayCount.get(classId)!.get(day) || 0;
-                  classTeacherDayCount.get(classId)!.set(day, currentCount + blockLength);
-                }
-                
-                placed = true;
-                task.isPlaced = true;
-                
-                // Yerleştirilen ders sayısını güncelle
-                mapping.assignedHours += blockLength;
-                
-                break;
-            }
-        }
-        if (placed) break;
-    }
-
-    if (!placed) {
-        // Yerleştirilemeyen mutlak öncelikli görevleri tekrar dene
-        task.retryCount++;
-
-        // Yeniden deneme sayısını kontrol et - daha fazla deneme şansı
-        if (task.retryCount < 150) {
-          // Birkaç kez daha dene
-          unplacedAbsoluteTasks.push(task);
-        } else {
-          // Çok fazla denedik, bu görevi geçici olarak atla
-          console.warn(`⚠️ Mutlak öncelikli görev ${task.retryCount} kez denendi ve yerleştirilemedi: ${task.mapping.classId} - ${task.mapping.subjectId}`);
-
-          // Anaokulu sınıfları için özel durum - daha agresif yerleştirme
-          if (isAnaokulu) {
-            // Anaokulu için son bir şans daha ver - çok daha fazla deneme
-            if (task.retryCount < 300) {
-              unplacedAbsoluteTasks.push(task);
-            }
           }
-        }
-    }
-  }
-
-  // Yerleştirilemeyen mutlak öncelikli görevleri raporla
-  const unplacedAbsoluteTasksCount = absolutePriorityTasks.filter(t => !t.isPlaced).length;
-  if (unplacedAbsoluteTasksCount > 0) {
-    console.warn(`⚠️ ${unplacedAbsoluteTasksCount} mutlak öncelikli görev yerleştirilemedi!`);
-  } else {
-    console.log(`✅ Tüm mutlak öncelikli görevler (${absolutePriorityTasks.length}) başarıyla yerleştirildi!`);
-  }
-
-  // AŞAMA 4: DİĞER DERSLERİ YERLEŞTİRME DÖNGÜSÜ
-  const regularTasks = allTasks.filter(t => t.priority > 0);
-  let unplacedTasks = regularTasks.filter(t => !t.isPlaced);
-
-  console.log(`📚 NORMAL ÖNCELİKLİ DERSLER: ${regularTasks.length} ders`);
-  
-  const maxAttempts = allTasks.length * 50; // Çok daha fazla deneme şansı
-  let attempts = 0, lastProgressLog = 0;
-
-  while (unplacedTasks.length > 0 && attempts < maxAttempts) {
-    const task = unplacedTasks.shift()!;
-    attempts++;
-
-    // Her 50 denemede bir, tarayıcının diğer işleri yapmasına izin ver.
-    if (attempts % 50 === 0) {
-      await yieldToMainThread();
-    }
-    
-    // Her 500 denemede bir ilerleme durumunu logla
-    if (attempts - lastProgressLog >= 500) {
-      const placedCount = allTasks.filter(t => t.isPlaced).length;
-      console.log(`🔄 İlerleme: ${placedCount}/${allTasks.length} görev yerleştirildi (${Math.round(placedCount/allTasks.length*100)}%)`);
-      lastProgressLog = attempts;
-    }
-
-    const { mapping, blockLength, distributionDay } = task;
-    const { teacherId, classId, subjectId } = mapping;
-    const teacher = allTeachers.find(t => t.id === teacherId);
-    const classItem = allClasses.find(c => c.id === classId);
-    const subject = allSubjects.find(s => s.id === subjectId);
-
-    if (!teacher || !classItem || !subject) continue;
-    
-    const isClassTeacher = classItem.classTeacherId === teacher.id;
-    const isSinifOgretmenligi = (teacher.branch || '').toUpperCase().includes('SINIF ÖĞRETMENLİĞİ');
-    const classLevel = getEntityLevel(classItem);
-    const isAnaokulu = classLevel === 'Anaokulu';  
-    const isIlkokul = classLevel === 'İlkokul';
-    
-    // Günlük ders limiti - daha esnek limitler
-    const dailyLimit = isAnaokulu ? 45 : // Anaokulu için limitsiz
-                      (isClassTeacher && isIlkokul) ? 15 : // İlkokul sınıf öğretmeni için daha yüksek
-                      isIlkokul ? 10 : // İlkokul için normal
-                      (isSinifOgretmenligi ? 10 : 8); // Diğer öğretmenler için daha yüksek
-
-    let placed = false;
-    
-    // Günleri önceliklendirme - sınıf öğretmenleri için tüm günleri kullan
-    let dayOrder = [...DAYS];
-    
-    // Dağıtım şekli varsa, belirli bir gün için yerleştirme yap
-    if (distributionDay !== undefined && distributionDay < dayOrder.length) {
-      // Sadece belirtilen günü kullan
-      dayOrder = [dayOrder[distributionDay]];
-    }
-    // Anaokulu sınıfları için günleri dengeli dağıtmak için sırala
-    else if ((isAnaokulu || isClassTeacher) && classTeacherDayCount.has(classId)) {
-      // Günleri, o güne atanan ders sayısına göre sırala (az olan önce)
-      dayOrder.sort((a, b) => {
-        const countA = classTeacherDayCount.get(classId)!.get(a) || 0;
-        const countB = classTeacherDayCount.get(classId)!.get(b) || 0;
-        return countA - countB;
-      });
-    } else if (task.priority <= 2) {
-      // Yüksek öncelikli dersler için günleri karıştırma
-    } else {
-      // Diğer öğretmenler için günleri karıştır
-      dayOrder.sort(() => Math.random() - 0.5);
-    }
-    
-    for (const day of dayOrder) {
-        // YENİ: Anaokulu için günlük limit kontrolünü tamamen kaldır
-        const currentDailyCount = dailyLessonCount.get(classId)?.get(day)?.get(subjectId) || 0;  
-        
-        // Anaokulu ve sınıf öğretmenleri için daha esnek limit
-        if (!isAnaokulu && !isClassTeacher && (currentDailyCount + blockLength) > dailyLimit) {
+          
+          const slotKey = `${day}-${period}`;
+          if (teacherAvailability.get(teacherId)?.has(slotKey) || 
+              classAvailability.get(classId)?.has(slotKey) || 
+              constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
+              constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
             continue;
+          }
+          
+          // Kulüp dersini yerleştir
+          classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+          teacherAvailability.get(teacherId)!.add(slotKey);
+          classAvailability.get(classId)!.add(slotKey);
+          
+          // Haftalık ders saati sayaçlarını güncelle
+          classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
+          teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
+          
+          // Yerleştirilen ders sayısını güncelle
+          mapping.assignedHours++;
+          task.isPlaced = true;
+          placedTasksCount++;
+          
+          console.log(`✅ Kulüp dersi yerleştirildi: ${classItem.name} - ${day} ${period}. ders`);
+          
+          // Bir ders saati yerleştirdik, sonraki derse geç
+          break;
         }
-
-        // Periyotları önceliklendirme - sınıf öğretmenleri için sabah saatlerini tercih et
-        let periodOrder = [...PERIODS];
-        if ((task.priority <= 2 || isClassTeacher) && (classLevel === 'İlkokul' || classLevel === 'Anaokulu')) {
-          // Sınıf öğretmenleri için sabah saatlerini önceliklendir
+      }
+      
+      // Sonra sınıf öğretmeni derslerini yerleştir
+      console.log(`👨‍🏫 ${classItem.name} sınıfı için ${classTeacherTasks.length} sınıf öğretmeni dersi yerleştiriliyor...`);
+      
+      // Günlere dengeli dağıtım için sayaç
+      const dayCount = new Map<string, number>();
+      DAYS.forEach(day => dayCount.set(day, 0));
+      
+      for (const task of classTeacherTasks) {
+        if (task.isPlaced) continue;
+        
+        const { mapping, blockLength, distr
+        )
+      }
+      )
+    }
+  }
+}ibutionDay } = task;
+        const { teacherId, classId, subjectId } = mapping;
+        
+        // Günleri dengeli dağıtım için sırala
+        let dayOrder = [...DAYS];
+        
+        // Dağıtım şekli varsa, belirli bir gün için yerleştirme yap
+        if (distributionDay !== undefined && distributionDay < dayOrder.length) {
+          dayOrder = [dayOrder[distributionDay]];
+        } else {
+          // Günleri, o güne atanan ders sayısına göre sırala (az olan önce)
+          dayOrder.sort((a, b) => {
+            const countA = dayCount.get(a) || 0;
+            const countB = dayCount.get(b) || 0;
+            return countA - countB;
+          });
+        }
+        
+        let placed = false;
+        
+        // Her gün için dene
+        for (const day of dayOrder) {
+          if (placed) break;
+          
+          // Günlük ders sayısını kontrol et
+          const currentDailyCount = dayCount.get(day) || 0;
+          
+          // Günlük limit - eğitim seviyesine göre
+          const dailyLimit = level === 'Anaokulu' ? 45 : level === 'İlkokul' ? 12 : 8;
+          
+          // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
+          if (currentDailyCount >= dailyLimit && level !== 'Anaokulu') {
+            continue;
+          }
+          
+          // Periyotları sırala - sabah saatlerini önceliklendir
+          let periodOrder = [...PERIODS];
           periodOrder.sort((a, b) => {
             const aNum = parseInt(a);
             const bNum = parseInt(b);
             if (isNaN(aNum) || isNaN(bNum)) return 0;
             return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
           });
-        } else if (!isAnaokulu) {
-          // Diğer öğretmenler için periyotları karıştır
-          periodOrder.sort(() => Math.random() - 0.5);
-        }
-
-        // Tüm olası başlangıç noktalarını dene
-        for (let i = 0; i <= periodOrder.length - blockLength; i++) {
+          
+          // Blok yerleştirme için tüm olası başlangıç noktalarını dene
+          for (let i = 0; i <= periodOrder.length - blockLength; i++) {
             let isAvailable = true;
             const periodsToUse = [];
             
@@ -625,56 +600,211 @@ export async function generateSystematicSchedule(
             }
             
             if (isAvailable && periodsToUse.length === blockLength) {
-                // Tüm periyotlara yerleştir
-                for (const period of periodsToUse) {
-                    const slotKey = `${day}-${period}`;
-                    classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
-                    teacherAvailability.get(teacherId)!.add(slotKey);
-                    classAvailability.get(classId)!.add(slotKey);
-                    
-                    // Haftalık ders saati sayaçlarını güncelle
-                    classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
-                    teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
-                    
-                    // Yerleştirme detayını logla (sadece her 10 yerleştirmede bir)
-                    if (Math.random() < 0.1) console.log(`✅ Yerleştirildi: ${classItem.name} - ${subject.name} - ${teacher.name} - ${day} ${period}. ders`);
-                }
+              // Tüm periyotlara yerleştir
+              for (const period of periodsToUse) {
+                const slotKey = `${day}-${period}`;
+                classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+                teacherAvailability.get(teacherId)!.add(slotKey);
+                classAvailability.get(classId)!.add(slotKey);
                 
-                // Günlük ders sayısını güncelle
-                const dayCountMap = dailyLessonCount.get(classId)!.get(day)!;
-                dayCountMap.set(subjectId, (dayCountMap.get(subjectId) || 0) + blockLength);
+                // Haftalık ders saati sayaçlarını güncelle
+                classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
+                teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
                 
-                // Sınıf öğretmeni gün sayacını güncelle
-                if (isClassTeacher && classTeacherDayCount.has(classId)) {
-                  const currentCount = classTeacherDayCount.get(classId)!.get(day) || 0;
-                  classTeacherDayCount.get(classId)!.set(day, currentCount + blockLength);
-                }
+                // Günlük sayacı güncelle
+                dayCount.set(day, (dayCount.get(day) || 0) + 1);
                 
-                placed = true;
-                task.isPlaced = true;
-                
-                // Yerleştirilen ders sayısını güncelle
-                mapping.assignedHours += blockLength;
-                
-                break;
+                console.log(`✅ Sınıf öğretmeni dersi yerleştirildi: ${classItem.name} - ${day} ${period}. ders`);
+              }
+              
+              placed = true;
+              task.isPlaced = true;
+              placedTasksCount++;
+              
+              // Yerleştirilen ders sayısını güncelle
+              mapping.assignedHours += blockLength;
+              
+              break;
             }
+          }
         }
-        if (placed) break;
-    }
-
-    if (!placed) {
-        task.retryCount++;
         
-        // Yeniden deneme sayısını kontrol et - anaokulu için daha fazla deneme
-        const maxRetries = isAnaokulu ? 300 : // Anaokulu için çok daha fazla deneme
-                          isClassTeacher ? 200 : // Sınıf öğretmenleri için daha fazla deneme
-                          isIlkokul ? 100 : 80; // Diğer dersler için daha fazla deneme
-        
-        if (task.retryCount < maxRetries) {
-          // Birkaç kez daha dene
-          unplacedTasks.push(task); // Yerleşemezse listenin sonuna tekrar ekle
+        // Yerleştirilemedi, tekrar dene
+        if (!placed) {
+          task.retryCount++;
+          
+          // Yeniden deneme sayısını kontrol et
+          if (task.retryCount < 100) {
+            // Sınıf öğretmeni dersleri için daha fazla deneme
+            classTeacherTasks.push(task);
+          } else {
+            console.warn(`⚠️ Sınıf öğretmeni dersi ${task.retryCount} kez denendi ve yerleştirilemedi: ${classItem.name} - ${subjectId}`);
+          }
         }
+      }
+      
+      // Son olarak diğer dersleri yerleştir
+      console.log(`📚 ${classItem.name} sınıfı için ${otherClassTasks.length} diğer ders yerleştiriliyor...`);
+      
+      for (const task of otherClassTasks) {
+        if (task.isPlaced) continue;
+        
+        const { mapping, blockLength, distributionDay } = task;
+        const { teacherId, classId, subjectId } = mapping;
+        const subject = allSubjects.find(s => s.id === subjectId);
+        
+        if (!subject) continue;
+        
+        // Günleri dengeli dağıtım için sırala
+        let dayOrder = [...DAYS];
+        
+        // Dağıtım şekli varsa, belirli bir gün için yerleştirme yap
+        if (distributionDay !== undefined && distributionDay < dayOrder.length) {
+          dayOrder = [dayOrder[distributionDay]];
+        } else {
+          // Günleri karıştır (dengeli dağıtım için)
+          dayOrder.sort(() => Math.random() - 0.5);
+        }
+        
+        let placed = false;
+        
+        // Her gün için dene
+        for (const day of dayOrder) {
+          if (placed) break;
+          
+          // Günlük ders sayısını kontrol et
+          const currentDailyCount = dayCount.get(day) || 0;
+          
+          // Günlük limit - eğitim seviyesine göre
+          const dailyLimit = level === 'Anaokulu' ? 45 : level === 'İlkokul' ? 10 : 8;
+          
+          // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
+          if (currentDailyCount >= dailyLimit && level !== 'Anaokulu') {
+            continue;
+          }
+          
+          // Periyotları sırala - eğitim seviyesine göre
+          let periodOrder = [...PERIODS];
+          if (level === 'Anaokulu' || level === 'İlkokul') {
+            // Anaokulu ve ilkokul için sabah saatlerini önceliklendir
+            periodOrder.sort((a, b) => {
+              const aNum = parseInt(a);
+              const bNum = parseInt(b);
+              if (isNaN(aNum) || isNaN(bNum)) return 0;
+              return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
+            });
+          } else {
+            // Ortaokul için periyotları karıştır
+            periodOrder.sort(() => Math.random() - 0.5);
+          }
+          
+          // Blok yerleştirme için tüm olası başlangıç noktalarını dene
+          for (let i = 0; i <= periodOrder.length - blockLength; i++) {
+            let isAvailable = true;
+            const periodsToUse = [];
+            
+            // Blok için uygun ardışık periyotları bul
+            for (let j = 0; j < blockLength; j++) {
+              const periodIndex = i + j;
+              if (periodIndex >= periodOrder.length) {
+                isAvailable = false;
+                break;
+              }
+              const period = periodOrder[periodIndex];
+              
+              // Slot zaten dolu mu kontrol et
+              if (classScheduleGrids[classId][day][period] !== undefined && 
+                  classScheduleGrids[classId][day][period] !== null) {
+                isAvailable = false;
+                break;
+              }
+              
+              const slotKey = `${day}-${period}`;
+              if (teacherAvailability.get(teacherId)?.has(slotKey) || 
+                  classAvailability.get(classId)?.has(slotKey) || 
+                  constraintMap.get(`teacher-${teacherId}-${day}-${period}`) === 'unavailable' || 
+                  constraintMap.get(`class-${classId}-${day}-${period}`) === 'unavailable') {
+                isAvailable = false;
+                break;
+              }
+              
+              periodsToUse.push(period);
+            }
+            
+            if (isAvailable && periodsToUse.length === blockLength) {
+              // Tüm periyotlara yerleştir
+              for (const period of periodsToUse) {
+                const slotKey = `${day}-${period}`;
+                classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+                teacherAvailability.get(teacherId)!.add(slotKey);
+                classAvailability.get(classId)!.add(slotKey);
+                
+                // Haftalık ders saati sayaçlarını güncelle
+                classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + 1);
+                teacherWeeklyHours.set(teacherId, (teacherWeeklyHours.get(teacherId) || 0) + 1);
+                
+                // Günlük sayacı güncelle
+                dayCount.set(day, (dayCount.get(day) || 0) + 1);
+                
+                console.log(`✅ Ders yerleştirildi: ${classItem.name} - ${subject.name} - ${day} ${period}. ders`);
+              }
+              
+              placed = true;
+              task.isPlaced = true;
+              placedTasksCount++;
+              
+              // Yerleştirilen ders sayısını güncelle
+              mapping.assignedHours += blockLength;
+              
+              break;
+            }
+          }
+        }
+        
+        // Yerleştirilemedi, tekrar dene
+        if (!placed) {
+          task.retryCount++;
+          
+          // Yeniden deneme sayısını kontrol et
+          if (task.retryCount < 50) {
+            // Birkaç kez daha dene
+            otherClassTasks.push(task);
+          }
+        }
+      }
+      
+      // Sınıf için yerleştirme durumunu raporla
+      const classTasksPlaced = classTasks.filter(t => t.isPlaced).length;
+      const classTasksTotal = classTasks.length;
+      const classTasksPercentage = Math.round((classTasksPlaced / classTasksTotal) * 100);
+      
+      console.log(`📊 ${classItem.name} sınıfı: ${classTasksPlaced}/${classTasksTotal} görev yerleştirildi (${classTasksPercentage}%)`);
+      
+      // Sınıfın haftalık ders saati hedefini kontrol et
+      const currentClassHours = classWeeklyHours.get(classId) || 0;
+      const targetClassHours = classTargetHours.get(classId) || 45;
+      const classHoursPercentage = Math.round((currentClassHours / targetClassHours) * 100);
+      
+      console.log(`⏱️ ${classItem.name} sınıfı: ${currentClassHours}/${targetClassHours} saat (${classHoursPercentage}%)`);
+      
+      // Tarayıcının diğer işleri yapmasına izin ver
+      await yieldToMainThread();
     }
+    
+    // Eğitim seviyesi için yerleştirme durumunu raporla
+    const levelTasksTotal = allTasks.filter(t => {
+      const classItem = allClasses.find(c => c.id === t.mapping.classId);
+      return classItem && getEntityLevel(classItem) === level;
+    }).length;
+    
+    const levelTasksPlaced = allTasks.filter(t => {
+      const classItem = allClasses.find(c => c.id === t.mapping.classId);
+      return classItem && getEntityLevel(classItem) === level && t.isPlaced;
+    }).length;
+    
+    const levelTasksPercentage = Math.round((levelTasksPlaced / levelTasksTotal) * 100);
+    
+    console.log(`📊 ${level} seviyesi: ${levelTasksPlaced}/${levelTasksTotal} görev yerleştirildi (${levelTasksPercentage}%)`);
   }
 
   // AŞAMA 5: SONUÇLARI DERLE
@@ -704,30 +834,35 @@ export async function generateSystematicSchedule(
   const placedTasks = allTasks.filter(t => t.isPlaced);
   const placedLessons = placedTasks.reduce((sum, task) => sum + task.blockLength, 0);
   const totalLessonsToPlace = allTasks.reduce((sum, task) => sum + task.blockLength, 0);
-
-  // Yerleştirilemeyen dersleri raporla
+  
+  // Yerleştirilemeyen dersleri raporla - eğitim seviyesine göre grupla
   const unassignedLessonsMap = new Map<string, UnassignedLesson>();
   allTasks.filter(task => !task.isPlaced).forEach(task => {
-      const { mapping, blockLength } = task;
-      const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}-${blockLength}`;
-      const classItem = allClasses.find(c => c.id === mapping.classId);  
-      const subject = allSubjects.find(s => s.id === mapping.subjectId);  
-      const teacher = allTeachers.find(t => t.id === mapping.teacherId);  
-      
-      if (classItem && subject && teacher) {
-          if (!unassignedLessonsMap.has(key)) {
-              unassignedLessonsMap.set(key, {
-                  classId: classItem.id, className: classItem.name, subjectId: subject.id,
-                  subjectName: subject.name, teacherId: teacher.id, teacherName: teacher.name,
-                  missingHours: 0, totalHours: mapping.weeklyHours
-              });
-          }
-          const lesson = unassignedLessonsMap.get(key);
-          if(lesson) {
-            // Blok uzunluğunu ekle
-            lesson.missingHours += blockLength;
-          }
+    const { mapping, blockLength } = task;
+    const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}-${blockLength}`;
+    const classItem = allClasses.find(c => c.id === mapping.classId);  
+    const subject = allSubjects.find(s => s.id === mapping.subjectId);  
+    const teacher = allTeachers.find(t => t.id === mapping.teacherId);  
+    
+    if (classItem && subject && teacher) {
+      if (!unassignedLessonsMap.has(key)) {
+        unassignedLessonsMap.set(key, {
+          classId: classItem.id, 
+          className: classItem.name, 
+          subjectId: subject.id,
+          subjectName: subject.name, 
+          teacherId: teacher.id, 
+          teacherName: teacher.name,
+          missingHours: 0, 
+          totalHours: mapping.weeklyHours
+        });
       }
+      const lesson = unassignedLessonsMap.get(key);
+      if(lesson) {
+        // Blok uzunluğunu ekle
+        lesson.missingHours += blockLength;
+      }
+    }
   });
 
   const unassignedLessons = Array.from(unassignedLessonsMap.values());
@@ -736,7 +871,7 @@ export async function generateSystematicSchedule(
       const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0);
       warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
       
-      // Yerleştirilemeyen dersleri öncelik sırasına göre sırala
+      // Yerleştirilemeyen dersleri eğitim seviyesi ve sınıf öğretmeni önceliğine göre sırala
       unassignedLessons.sort((a, b) => {
         const aClass = allClasses.find(c => c.id === a.classId);
         const bClass = allClasses.find(c => c.id === b.classId);
@@ -798,6 +933,7 @@ export async function generateSystematicSchedule(
   // Genel istatistikler
   const overallPercentage = Math.round(placedLessons/totalLessonsToPlace*100);
   console.log(`📊 Genel İstatistikler: ${placedLessons}/${totalLessonsToPlace} ders saati yerleştirildi (${overallPercentage}%)`);
+  console.log(`📊 Yerleştirilen görev sayısı: ${placedTasksCount}/${allTasks.length} (${Math.round(placedTasksCount/allTasks.length*100)}%)`);
   
   // Anaokulu sınıflarının durumunu özel olarak raporla
   const anaokulClasses = allClasses.filter(c => getEntityLevel(c) === 'Anaokulu' && selectedClassIds.has(c.id));
@@ -851,7 +987,11 @@ export async function generateSystematicSchedule(
   return {
     success: true,
     schedules: finalSchedules,
-    statistics: { totalLessonsToPlace, placedLessons, unassignedLessons },
+    statistics: { 
+      totalLessonsToPlace, 
+      placedLessons, 
+      unassignedLessons 
+    },
     warnings,
     errors: [],
   };
