@@ -516,13 +516,7 @@ export async function generateSystematicSchedule(
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
         
-        const { mapping, blockLength, distr
-        )
-      }
-      )
-    }
-  }
-}ibutionDay } = task;
+        const { mapping, blockLength, distributionDay } = task;
         const { teacherId, classId, subjectId } = mapping;
         
         // Günleri dengeli dağıtım için sırala
@@ -981,6 +975,88 @@ export async function generateSystematicSchedule(
       });
     }
   }
+  
+  // AŞAMA 4: SONUÇLARI DERLE
+  console.log('🏁 Program oluşturma tamamlanıyor...');
+  
+  const teacherSchedules: { [teacherId: string]: Schedule['schedule'] } = {};
+  selectedTeacherIds.forEach(teacherId => { 
+    teacherSchedules[teacherId] = {}; 
+    DAYS.forEach(day => teacherSchedules[teacherId][day] = {}); 
+  });
+  
+  Object.entries(classScheduleGrids).forEach(([classId, grid]) => {
+    Object.entries(grid).forEach(([day, periods]) => { 
+      Object.entries(periods).forEach(([period, slot]) => { 
+        if (slot && slot.teacherId && !slot.isFixed) { 
+          if (!teacherSchedules[slot.teacherId]) {
+              teacherSchedules[slot.teacherId] = {}; 
+              DAYS.forEach(d => teacherSchedules[slot.teacherId][d] = {});
+          }
+          teacherSchedules[slot.teacherId][day][period] = { classId, subjectId: slot.subjectId };
+        } 
+      }); 
+    }); 
+  });
+  
+  const finalSchedules = Object.entries(teacherSchedules).map(([teacherId, schedule]) => ({ teacherId, schedule, updatedAt: new Date() }));
+  
+  // Yerleştirilen ve yerleştirilemeyen dersleri hesapla (istatistikler)
+  const placedTasks = allTasks.filter(t => t.isPlaced);
+  const placedLessons = placedTasks.reduce((sum, task) => sum + task.blockLength, 0);
+  const totalLessonsToPlace = allTasks.reduce((sum, task) => sum + task.blockLength, 0);
+  
+  // Yerleştirilemeyen dersleri raporla - eğitim seviyesine göre grupla
+  const unassignedLessonsMap = new Map<string, UnassignedLesson>();
+  allTasks.filter(task => !task.isPlaced).forEach(task => {
+    const { mapping, blockLength } = task;
+    const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}-${blockLength}`;
+    const classItem = allClasses.find(c => c.id === mapping.classId);  
+    const subject = allSubjects.find(s => s.id === mapping.subjectId);  
+    const teacher = allTeachers.find(t => t.id === mapping.teacherId);  
+    
+    if (classItem && subject && teacher) {
+      if (!unassignedLessonsMap.has(key)) {
+        unassignedLessonsMap.set(key, {
+          classId: classItem.id, 
+          className: classItem.name, 
+          subjectId: subject.id,
+          subjectName: subject.name, 
+          teacherId: teacher.id, 
+          teacherName: teacher.name,
+          missingHours: 0, 
+          totalHours: mapping.weeklyHours
+        });
+      }
+      const lesson = unassignedLessonsMap.get(key);
+      if(lesson) {
+        // Blok uzunluğunu ekle
+        lesson.missingHours += blockLength;
+      }
+    }
+  });
+
+  const unassignedLessons = Array.from(unassignedLessonsMap.values());
+  const warnings: string[] = [];
+  if (unassignedLessons.length > 0) { 
+      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0);
+      warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
+  }
+  
+  console.log(`✅ Program oluşturma tamamlandı. Süre: ${(Date.now() - startTime) / 1000} saniye. Sonuç: ${placedLessons} / ${totalLessonsToPlace} (${Math.round(placedLessons/totalLessonsToPlace*100)}%)`);
+
+  return {
+    success: true,
+    schedules: finalSchedules,
+    statistics: { 
+      totalLessonsToPlace, 
+      placedLessons, 
+      unassignedLessons 
+    },
+    warnings,
+    errors: [],
+  };
+}
   
   console.log(`✅ Program oluşturma tamamlandı. Süre: ${(Date.now() - startTime) / 1000} saniye. Sonuç: ${placedLessons} / ${totalLessonsToPlace} (${overallPercentage}%)`);
 
