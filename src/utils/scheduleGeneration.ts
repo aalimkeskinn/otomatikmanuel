@@ -380,8 +380,8 @@ export async function generateSystematicSchedule(
       // Bir ders saati yerleştirdik, sonraki derse geç
       break;
     }
-  }
-
+  });
+  
   // AŞAMA 2: ANAOKULU SINIFLARINI ÖNCE İŞLE
   const anaokulTasks = allTasks.filter(t => {
     const classItem = allClasses.find(c => c.id === t.mapping.classId);
@@ -516,7 +516,19 @@ export async function generateSystematicSchedule(
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
         
-        const { mapping, blockLength, distributionDay } = task;
+        const { mapping, blockLength
+        )
+      }
+      )
+    }
+  }
+}, dist
+        )
+      }
+      )
+    }
+  }
+}ributionDay } = task;
         const { teacherId, classId, subjectId } = mapping;
         
         // Günleri dengeli dağıtım için sırala
