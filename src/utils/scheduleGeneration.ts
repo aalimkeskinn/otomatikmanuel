@@ -380,7 +380,7 @@ export async function generateSystematicSchedule(
       // Bir ders saati yerleştirdik, sonraki derse geç
       break;
     }
-  };
+  })
   
   // AŞAMA 2: ANAOKULU SINIFLARINI ÖNCE İŞLE
   const anaokulTasks = allTasks.filter(t => {
