@@ -380,38 +380,8 @@ export async function generateSystematicSchedule(
       // Bir ders saati yerleştirdik, sonraki derse geç
       break;
     }
-  });
+  }
   
-  // AŞAMA 2: ANAOKULU SINIFLARINI ÖNCE İŞLE
-  const anaokulTasks = allTasks.filter(t => {
-    const classItem = allClasses.find(c => c.id === t.mapping.classId);
-    return classItem && getEntityLevel(classItem) === 'Anaokulu';
-  });
-  
-  console.log(`🧸 Anaokulu görevleri: ${anaokulTasks.length} görev`);
-  
-  // AŞAMA 3: MUTLAK ÖNCELİKLİ DERSLERİ YERLEŞTİR (Sınıf Öğretmeni Dersleri)
-  const absolutePriorityTasks = allTasks.filter(t => t.priority === 0);
-  let unplacedAbsoluteTasks = [...absolutePriorityTasks];
-  
-  console.log(`🔝 MUTLAK ÖNCELİKLİ DERSLER: ${absolutePriorityTasks.length} ders (Sınıf öğretmeni dersleri)`);
-  
-  // Mutlak öncelikli dersleri yerleştir
-  const maxAbsoluteAttempts = absolutePriorityTasks.length * 300; // Çok daha fazla deneme şansı
-  let absoluteAttempts = 0;
-  
-  // Günlere dengeli dağıtım için sayaç
-  const classTeacherDayCount = new Map<string, Map<string, number>>();
-  
-  // Her sınıf için gün sayaçlarını başlat
-  allClasses.forEach(classItem => {
-    if (classItem.classTeacherId) {
-      classTeacherDayCount.set(classItem.id, new Map());
-      DAYS.forEach(day => {
-        classTeacherDayCount.get(classItem.id)!.set(day, 0);
-      });
-    }
-  });
   // AŞAMA 3: EĞİTİM SEVİYESİ BAZLI YERLEŞTİRME
   console.log('🏫 Eğitim seviyesi bazlı yerleştirme başlatılıyor...');
   
@@ -801,7 +771,9 @@ export async function generateSystematicSchedule(
     console.log(`📊 ${level} seviyesi: ${levelTasksPlaced}/${levelTasksTotal} görev yerleştirildi (${levelTasksPercentage}%)`);
   }
 
-  // AŞAMA 5: SONUÇLARI DERLE
+  // AŞAMA 4: SONUÇLARI DERLE
+  console.log('🏁 Program oluşturma tamamlanıyor...');
+  
   const teacherSchedules: { [teacherId: string]: Schedule['schedule'] } = {};
   selectedTeacherIds.forEach(teacherId => { 
     teacherSchedules[teacherId] = {}; 
@@ -976,88 +948,6 @@ export async function generateSystematicSchedule(
     }
   }
   
-  // AŞAMA 4: SONUÇLARI DERLE
-  console.log('🏁 Program oluşturma tamamlanıyor...');
-  
-  const teacherSchedules: { [teacherId: string]: Schedule['schedule'] } = {};
-  selectedTeacherIds.forEach(teacherId => { 
-    teacherSchedules[teacherId] = {}; 
-    DAYS.forEach(day => teacherSchedules[teacherId][day] = {}); 
-  });
-  
-  Object.entries(classScheduleGrids).forEach(([classId, grid]) => {
-    Object.entries(grid).forEach(([day, periods]) => { 
-      Object.entries(periods).forEach(([period, slot]) => { 
-        if (slot && slot.teacherId && !slot.isFixed) { 
-          if (!teacherSchedules[slot.teacherId]) {
-              teacherSchedules[slot.teacherId] = {}; 
-              DAYS.forEach(d => teacherSchedules[slot.teacherId][d] = {});
-          }
-          teacherSchedules[slot.teacherId][day][period] = { classId, subjectId: slot.subjectId };
-        } 
-      }); 
-    }); 
-  });
-  
-  const finalSchedules = Object.entries(teacherSchedules).map(([teacherId, schedule]) => ({ teacherId, schedule, updatedAt: new Date() }));
-  
-  // Yerleştirilen ve yerleştirilemeyen dersleri hesapla (istatistikler)
-  const placedTasks = allTasks.filter(t => t.isPlaced);
-  const placedLessons = placedTasks.reduce((sum, task) => sum + task.blockLength, 0);
-  const totalLessonsToPlace = allTasks.reduce((sum, task) => sum + task.blockLength, 0);
-  
-  // Yerleştirilemeyen dersleri raporla - eğitim seviyesine göre grupla
-  const unassignedLessonsMap = new Map<string, UnassignedLesson>();
-  allTasks.filter(task => !task.isPlaced).forEach(task => {
-    const { mapping, blockLength } = task;
-    const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}-${blockLength}`;
-    const classItem = allClasses.find(c => c.id === mapping.classId);  
-    const subject = allSubjects.find(s => s.id === mapping.subjectId);  
-    const teacher = allTeachers.find(t => t.id === mapping.teacherId);  
-    
-    if (classItem && subject && teacher) {
-      if (!unassignedLessonsMap.has(key)) {
-        unassignedLessonsMap.set(key, {
-          classId: classItem.id, 
-          className: classItem.name, 
-          subjectId: subject.id,
-          subjectName: subject.name, 
-          teacherId: teacher.id, 
-          teacherName: teacher.name,
-          missingHours: 0, 
-          totalHours: mapping.weeklyHours
-        });
-      }
-      const lesson = unassignedLessonsMap.get(key);
-      if(lesson) {
-        // Blok uzunluğunu ekle
-        lesson.missingHours += blockLength;
-      }
-    }
-  });
-
-  const unassignedLessons = Array.from(unassignedLessonsMap.values());
-  const warnings: string[] = [];
-  if (unassignedLessons.length > 0) { 
-      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0);
-      warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
-  }
-  
-  console.log(`✅ Program oluşturma tamamlandı. Süre: ${(Date.now() - startTime) / 1000} saniye. Sonuç: ${placedLessons} / ${totalLessonsToPlace} (${Math.round(placedLessons/totalLessonsToPlace*100)}%)`);
-
-  return {
-    success: true,
-    schedules: finalSchedules,
-    statistics: { 
-      totalLessonsToPlace, 
-      placedLessons, 
-      unassignedLessons 
-    },
-    warnings,
-    errors: [],
-  };
-}
-  
   console.log(`✅ Program oluşturma tamamlandı. Süre: ${(Date.now() - startTime) / 1000} saniye. Sonuç: ${placedLessons} / ${totalLessonsToPlace} (${overallPercentage}%)`);
 
   return {
@@ -1072,4 +962,5 @@ export async function generateSystematicSchedule(
     errors: [],
   };
 }
+
 // --- END OF FILE src/utils/scheduleGeneration.ts ---
