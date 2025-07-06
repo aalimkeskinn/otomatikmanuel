@@ -3,6 +3,7 @@
 import { DAYS, PERIODS, Schedule, Teacher, Class, Subject, parseDistributionPattern } from '../types';
 import { SubjectTeacherMapping, EnhancedGenerationResult, WizardData, UnassignedLesson } from '../types/wizard';
 import { TimeConstraint } from '../types/constraints';
+import { db } from '../config/firebase';
 
 // Tarayıcının arayüzü güncellemesine ve diğer işleri yapmasına izin vermek için küçük bir bekleme fonksiyonu
 const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -385,6 +386,32 @@ export async function generateSystematicSchedule(
   // AŞAMA 3: EĞİTİM SEVİYESİ BAZLI YERLEŞTİRME
   console.log('🏫 Eğitim seviyesi bazlı yerleştirme başlatılıyor...');
   
+  // Anaokulu sınıflarını önce işle
+  const anaokulTasks = allTasks.filter(t => {
+    const classItem = allClasses.find(c => c.id === t.mapping.classId);
+    return classItem && getEntityLevel(classItem) === 'Anaokulu';
+  });
+  
+  console.log(`🧸 Anaokulu görevleri: ${anaokulTasks.length} görev`);
+  
+  // MUTLAK ÖNCELİKLİ DERSLERİ YERLEŞTİR (Sınıf Öğretmeni Dersleri)
+  const absolutePriorityTasks = allTasks.filter(t => t.priority === 0);
+  
+  console.log(`🔝 MUTLAK ÖNCELİKLİ DERSLER: ${absolutePriorityTasks.length} ders (Sınıf öğretmeni dersleri)`);
+  
+  // Günlere dengeli dağıtım için sayaç
+  const classTeacherDayCount = new Map<string, Map<string, number>>();
+  
+  // Her sınıf için gün sayaçlarını başlat
+  allClasses.forEach(classItem => {
+    if (classItem.classTeacherId) {
+      classTeacherDayCount.set(classItem.id, new Map());
+      DAYS.forEach(day => {
+        classTeacherDayCount.get(classItem.id)!.set(day, 0);
+      });
+    }
+  });
+  
   // Eğitim seviyesi sıralaması: Anaokulu -> İlkokul -> Ortaokul
   const levelOrder = ['Anaokulu', 'İlkokul', 'Ortaokul'] as const;
   
@@ -413,7 +440,7 @@ export async function generateSystematicSchedule(
       // Sınıf öğretmeni görevlerini önce yerleştir
       const classTeacherTasks = classTasks.filter(t => 
         classItem.classTeacherId === t.mapping.teacherId
-      );
+      ).sort((a, b) => b.blockLength - a.blockLength); // Uzun bloklar önce
       
       // Kulüp dersleri
       const classClubTasks = classTasks.filter(t => {
@@ -424,7 +451,7 @@ export async function generateSystematicSchedule(
       // Diğer görevler
       const otherClassTasks = classTasks.filter(t => 
         !classTeacherTasks.includes(t) && !classClubTasks.includes(t)
-      );
+      ).sort((a, b) => b.blockLength - a.blockLength); // Uzun bloklar önce
       
       // Önce kulüp derslerini yerleştir
       for (const task of classClubTasks) {
@@ -482,6 +509,8 @@ export async function generateSystematicSchedule(
       // Günlere dengeli dağıtım için sayaç
       const dayCount = new Map<string, number>();
       DAYS.forEach(day => dayCount.set(day, 0));
+      const periodUsage = new Map<string, number>();
+      PERIODS.forEach(period => periodUsage.set(period, 0));
       
       for (const task of classTeacherTasks) {
         if (task.isPlaced) continue;
@@ -524,8 +553,17 @@ export async function generateSystematicSchedule(
           // Periyotları sırala - sabah saatlerini önceliklendir
           let periodOrder = [...PERIODS];
           periodOrder.sort((a, b) => {
-            const aNum = parseInt(a);
-            const bNum = parseInt(b);
+            const aNum = parseInt(a) || 0;
+            const bNum = parseInt(b) || 0;
+            const aUsage = periodUsage.get(a) || 0;
+            const bUsage = periodUsage.get(b) || 0;
+            
+            // Önce kullanım sayısına göre sırala (az kullanılan önce)
+            if (aUsage !== bUsage) {
+              return aUsage - bUsage;
+            }
+            
+            // Sonra periyot numarasına göre sırala (küçük olan önce)
             if (isNaN(aNum) || isNaN(bNum)) return 0;
             return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
           });
@@ -577,6 +615,9 @@ export async function generateSystematicSchedule(
                 
                 // Günlük sayacı güncelle
                 dayCount.set(day, (dayCount.get(day) || 0) + 1);
+                
+                // Periyot kullanım sayacını güncelle
+                periodUsage.set(period, (periodUsage.get(period) || 0) + 1);
                 
                 console.log(`✅ Sınıf öğretmeni dersi yerleştirildi: ${classItem.name} - ${day} ${period}. ders`);
               }
@@ -650,10 +691,19 @@ export async function generateSystematicSchedule(
           // Periyotları sırala - eğitim seviyesine göre
           let periodOrder = [...PERIODS];
           if (level === 'Anaokulu' || level === 'İlkokul') {
-            // Anaokulu ve ilkokul için sabah saatlerini önceliklendir
+            // Anaokulu ve ilkokul için sabah saatlerini ve az kullanılan periyotları önceliklendir
             periodOrder.sort((a, b) => {
-              const aNum = parseInt(a);
-              const bNum = parseInt(b);
+              const aNum = parseInt(a) || 0;
+              const bNum = parseInt(b) || 0;
+              const aUsage = periodUsage.get(a) || 0;
+              const bUsage = periodUsage.get(b) || 0;
+              
+              // Önce kullanım sayısına göre sırala (az kullanılan önce)
+              if (aUsage !== bUsage) {
+                return aUsage - bUsage;
+              }
+              
+              // Sonra periyot numarasına göre sırala (küçük olan önce)
               if (isNaN(aNum) || isNaN(bNum)) return 0;
               return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
             });
@@ -709,6 +759,9 @@ export async function generateSystematicSchedule(
                 
                 // Günlük sayacı güncelle
                 dayCount.set(day, (dayCount.get(day) || 0) + 1);
+                
+                // Periyot kullanım sayacını güncelle
+                periodUsage.set(period, (periodUsage.get(period) || 0) + 1);
                 
                 console.log(`✅ Ders yerleştirildi: ${classItem.name} - ${subject.name} - ${day} ${period}. ders`);
               }
@@ -772,7 +825,7 @@ export async function generateSystematicSchedule(
   }
 
   // AŞAMA 4: SONUÇLARI DERLE
-  console.log('🏁 Program oluşturma tamamlanıyor...');
+  console.log('🏁 Program oluşturma tamamlanıyor... Öğretmen programları oluşturuluyor.');
   
   const teacherSchedules: { [teacherId: string]: Schedule['schedule'] } = {};
   selectedTeacherIds.forEach(teacherId => { 
@@ -797,9 +850,9 @@ export async function generateSystematicSchedule(
   const finalSchedules = Object.entries(teacherSchedules).map(([teacherId, schedule]) => ({ teacherId, schedule, updatedAt: new Date() }));
   
   // Yerleştirilen ve yerleştirilemeyen dersleri hesapla (istatistikler)
-  const placedTasks = allTasks.filter(t => t.isPlaced);
-  const placedLessons = placedTasks.reduce((sum, task) => sum + task.blockLength, 0);
-  const totalLessonsToPlace = allTasks.reduce((sum, task) => sum + task.blockLength, 0);
+  const placedTasks = allTasks.filter(t => t.isPlaced).length;
+  const placedLessons = mappings.reduce((sum, m) => sum + m.assignedHours, 0);
+  const totalLessonsToPlace = mappings.reduce((sum, m) => sum + m.weeklyHours, 0);
   
   // Yerleştirilemeyen dersleri raporla - eğitim seviyesine göre grupla
   const unassignedLessonsMap = new Map<string, UnassignedLesson>();
@@ -834,8 +887,8 @@ export async function generateSystematicSchedule(
   const unassignedLessons = Array.from(unassignedLessonsMap.values());
   const warnings: string[] = [];
   if (unassignedLessons.length > 0) { 
-      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0);
-      warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
+      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + (l.missingHours || 0), 0);
+      warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours || 0} saat) yerleştirilemedi.`);
       
       // Yerleştirilemeyen dersleri eğitim seviyesi ve sınıf öğretmeni önceliğine göre sırala
       unassignedLessons.sort((a, b) => {
@@ -899,7 +952,7 @@ export async function generateSystematicSchedule(
   // Genel istatistikler
   const overallPercentage = Math.round(placedLessons/totalLessonsToPlace*100);
   console.log(`📊 Genel İstatistikler: ${placedLessons}/${totalLessonsToPlace} ders saati yerleştirildi (${overallPercentage}%)`);
-  console.log(`📊 Yerleştirilen görev sayısı: ${placedTasksCount}/${allTasks.length} (${Math.round(placedTasksCount/allTasks.length*100)}%)`);
+  console.log(`📊 Yerleştirilen görev sayısı: ${placedTasks}/${allTasks.length} (${Math.round(placedTasks/allTasks.length*100)}%)`);
   
   // Anaokulu sınıflarının durumunu özel olarak raporla
   const anaokulClasses = allClasses.filter(c => getEntityLevel(c) === 'Anaokulu' && selectedClassIds.has(c.id));

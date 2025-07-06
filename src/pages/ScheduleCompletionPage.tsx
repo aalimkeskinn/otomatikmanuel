@@ -169,7 +169,7 @@ const ScheduleCompletionPage = () => {
       // Sınıf bazında dersleri grupla
       const lessonsByClass = new Map<string, UnassignedLesson[]>();
       
-      // Önce tüm dersleri eğitim seviyesine göre grupla
+      // Önce tüm dersleri eğitim seviyesine ve sınıfa göre grupla
       for (const lesson of unassignedLessons) {
         const classItem = classes.find(c => c.id === lesson.classId);
         if (!classItem) continue;
@@ -193,8 +193,11 @@ const ScheduleCompletionPage = () => {
         }
       }
       
+      
       // Her sınıfın mevcut ders saatini hesapla
       const classHoursMap = new Map<string, number>();
+      const classTargetHours = new Map<string, number>();
+      
       workingSchedules.forEach(schedule => {
         Object.values(schedule.schedule).forEach(day => {
           Object.values(day).forEach(slot => {
@@ -206,7 +209,7 @@ const ScheduleCompletionPage = () => {
       });
       
       // Her öğretmenin mevcut ders saatini hesapla
-      const teacherHours = new Map<string, number>();
+      const teacherHoursMap = new Map<string, number>();
       workingSchedules.forEach(schedule => {
         let count = 0;
         Object.values(schedule.schedule).forEach(day => {
@@ -216,13 +219,13 @@ const ScheduleCompletionPage = () => {
             }
           });
         });
-        teacherHours.set(schedule.teacherId, count);
+        teacherHoursMap.set(schedule.teacherId, count);
       });
       
       console.log(`🔄 Eğitim seviyesi bazlı yerleştirme: Anaokulu: ${anaokulLessons.length}, İlkokul: ${ilkokulLessons.length}, Ortaokul: ${ortaokulLessons.length}, Diğer: ${otherLessons.length}`);
       
       // Tüm dersleri birleştir - öncelik sırasına göre
-      const remainingLessons = [...anaokulLessons, ...ilkokulLessons, ...ortaokulLessons, ...otherLessons];
+      let remainingLessons = [...anaokulLessons, ...ilkokulLessons, ...ortaokulLessons, ...otherLessons];
       let placedCount = 0;
       const totalMissingHours = remainingLessons.reduce((sum, lesson) => sum + lesson.missingHours, 0);
       
@@ -231,13 +234,13 @@ const ScheduleCompletionPage = () => {
       // Sınıf bazında yerleştirme yapmak için sınıfları döngüye al
       for (const [classId, classLessons] of lessonsByClass.entries()) {
         if (classLessons.length === 0) continue;
-        
+
         const classItem = classes.find(c => c.id === classId);
         if (!classItem) continue;
         
         const classLevel = classItem.level || (classItem.levels || [])[0];
         console.log(`🏫 ${classItem.name} sınıfı için ${classLessons.length} ders yerleştiriliyor (${classLevel})`);
-      }
+        
         // Sınıf öğretmeni derslerini önce yerleştir
         const classTeacherLessons = classLessons.filter(lesson => 
           classItem.classTeacherId === lesson.teacherId
@@ -282,8 +285,15 @@ const ScheduleCompletionPage = () => {
             if (isTeacherFree && isClassFree && clubLesson.missingHours > 0) {
               assignLessonToSlot(clubLesson, day, period);
               clubLesson.missingHours--;
+              
               placedCount++;
               console.log(`✅ Kulüp dersi yerleştirildi: ${clubLesson.className} - ${clubLesson.subjectName} - ${day} ${period}. ders`);
+              
+              // Sınıf saatlerini güncelle
+              classHoursMap.set(classId, (classHoursMap.get(classId) || 0) + 1);
+              
+              // Öğretmen saatlerini güncelle
+              teacherHoursMap.set(clubLesson.teacherId, (teacherHoursMap.get(clubLesson.teacherId) || 0) + 1);
             }
           }
         }
@@ -299,6 +309,8 @@ const ScheduleCompletionPage = () => {
           // Öğretmen ve sınıf programlarını al
           const teacherSchedule = workingSchedules.find(s => s.teacherId === lesson.teacherId)?.schedule || createEmptyScheduleGrid();
           const classSchedule: Schedule['schedule'] = createEmptyScheduleGrid();
+          
+          // Sınıf programını oluştur
           
           workingSchedules.forEach(s => {
             Object.entries(s.schedule).forEach(([day, daySlots]) => {
@@ -377,12 +389,14 @@ const ScheduleCompletionPage = () => {
                 // Yerleştirilen dersi güncelle
                 const updatedLessons = unassignedLessons.map(l => {
                   if (l === lesson) {
-                    return { ...l, missingHours: l.missingHours - 1 };
+                    const newMissingHours = Math.max(0, l.missingHours - 1);
+                    return { ...l, missingHours: newMissingHours };
                   }
                   return l;
-                }).filter(l => l.missingHours > 0);
+                });
                 
-                setUnassignedLessons(updatedLessons);
+                const filteredLessons = updatedLessons.filter(l => l.missingHours > 0);
+                setUnassignedLessons(filteredLessons);
                 
                 // Sınıf derslerini de güncelle
                 const classLessonIndex = classLessons.findIndex(l => 
@@ -398,10 +412,10 @@ const ScheduleCompletionPage = () => {
                 lessonPlaced = true;
                 
                 // Sınıf saatlerini güncelle
-                classHoursMap.set(lesson.classId, (classHoursMap.get(lesson.classId) || 0) + 1);
+                classHoursMap.set(classId, (classHoursMap.get(classId) || 0) + 1);
                 
                 // Öğretmen saatlerini güncelle
-                teacherHours.set(lesson.teacherId, (teacherHours.get(lesson.teacherId) || 0) + 1);
+                teacherHoursMap.set(lesson.teacherId, (teacherHoursMap.get(lesson.teacherId) || 0) + 1);
                 
                 break;
               }
