@@ -7,11 +7,6 @@ function getEntityLevel(entity: Teacher | Class): 'Anaokulu' | 'İlkokul' | 'Ort
     return (entity as any).level || (entity as any).levels?.[0] || 'İlkokul';
 }
 
-// Kulüp derslerini tespit et
-function isClubSubject(subject: Subject): boolean {
-  return subject.name.toLowerCase().includes('kulüp');
-}
-
 export function createSubjectTeacherMappings(
   wizardData: WizardData,
   allTeachers: Teacher[],
@@ -25,15 +20,6 @@ export function createSubjectTeacherMappings(
   const selectedClassIds = new Set(wizardData.classes.selectedClasses);
   const selectedSubjectIds = new Set(wizardData.subjects.selectedSubjects);
   const selectedTeacherIds = new Set(wizardData.teachers.selectedTeachers);
-
-  // Kulüp derslerini tespit et
-  const clubSubjectIds = new Set<string>();
-  allSubjects.forEach(subject => {
-    if (isClubSubject(subject)) {
-      clubSubjectIds.add(subject.id);
-      console.log(`🎭 Kulüp dersi tespit edildi: ${subject.name}`);
-    }
-  });
 
   // Sınıf-öğretmen-ders eşleştirmelerini kontrol et
   console.log('🔍 Eşleştirme başlatılıyor:', {
@@ -112,12 +98,9 @@ export function createSubjectTeacherMappings(
           const weeklyHours = wizardData.subjects.subjectHours[subjectId] || subject.weeklyHours;
           
           // Dağıtım şekli
-          const distribution = subject.distributionPattern
+          const distribution = subject.distributionPattern 
             ? parseDistributionPattern(subject.distributionPattern) 
             : undefined;
-          
-          // Kulüp dersi mi kontrol et
-          const isClub = clubSubjectIds.has(subjectId);
 
           // Eşleştirme oluştur
           const task: SubjectTeacherMapping = {
@@ -128,7 +111,7 @@ export function createSubjectTeacherMappings(
             weeklyHours,
             assignedHours: 0, 
             distribution, 
-            priority: isClub ? 'high' : 'medium', // Kulüp dersleri için yüksek öncelik
+            priority: 'medium',
           };
 
           // Dağıtım şekli kontrolü
@@ -146,8 +129,7 @@ export function createSubjectTeacherMappings(
   
   console.log(`📊 Eşleştirme sonuçları:`, {
     mappingsCount: mappings.length,
-    errorsCount: errors.length,
-    clubSubjectsCount: Array.from(clubSubjectIds).length
+    errorsCount: errors.length
   });
   
   if (mappings.length === 0 && selectedSubjectIds.size > 0) {
