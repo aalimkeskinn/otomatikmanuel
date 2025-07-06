@@ -70,7 +70,7 @@ export async function generateSystematicSchedule(
   // Sınıf bazında hedef ders saati (varsayılan 45)
   const classTargetHours = new Map<string, number>();
   
-  // Öğretmen bazında hedef ders saati (atanan derslerden hesaplanacak)
+  // Öğretmen bazında hedef ders saati
   const teacherTargetHours = new Map<string, number>();
 
   // Sınıf bazında günlük ders saati limitleri
@@ -100,11 +100,11 @@ export async function generateSystematicSchedule(
       classAvailability.set(classItem.id, new Set<string>());
       dailyLessonCount.set(classItem.id, new Map<string, Map<string, number>>());
       classWeeklyHours.set(classItem.id, 0); // Sınıf için haftalık ders saati sayacı
-      // Anaokulu için limit yok, ilkokul için 12, ortaokul için 10
+      // Anaokulu için limit yok, diğer sınıflar için 9 ders limiti
       classMaxDailyHours.set(classItem.id, 
         getEntityLevel(classItem) === 'Anaokulu' ? 45 : 9 // Her sınıfın günlük 9 ders limiti var
       );
-      classTargetHours.set(classItem.id, 45); // Her sınıf için hedef 45 saat
+      classTargetHours.set(classItem.id, 45); // Her sınıf için ZORUNLU 45 saat
       
       DAYS.forEach(day => { 
         classScheduleGrids[classItem.id][day] = {};
@@ -131,15 +131,8 @@ export async function generateSystematicSchedule(
   // Öğretmenlerin hedef ders saatlerini hesapla
   mappings.forEach(mapping => {
     const teacherId = mapping.teacherId;
-    const classId = mapping.classId;
     const currentTarget = teacherTargetHours.get(teacherId) || 0;
     teacherTargetHours.set(teacherId, currentTarget + mapping.weeklyHours);
-    
-    // Sınıf bazında hedef ders saatini güncelle (toplam 45 saati geçmemeli)
-    const classTarget = classTargetHours.get(classId) || 45;
-    if (classTarget > 45) {
-      console.warn(`⚠️ ${classId} sınıfı için hedef ders saati 45'i geçiyor: ${classTarget}`);
-    }
   });
   
   console.log('📊 Öğretmen hedef ders saatleri:');
@@ -204,10 +197,22 @@ export async function generateSystematicSchedule(
   // Görevleri oluştur
   mappings.forEach(mapping => {
     let hoursLeft = mapping.weeklyHours;
+    const classId = mapping.classId;
     const subject = allSubjects.find(s => s.id === mapping.subjectId);
     const isClubSubject = subject && clubSubjectIds.has(subject.id);
     const classItem = allClasses.find(c => c.id === mapping.classId);
     const teacher = allTeachers.find(t => t.id === mapping.teacherId);
+    
+    // Sınıfın 45 saate ulaşmasını sağla
+    const currentClassHours = classWeeklyHours.get(classId) || 0;
+    const classAssignedHours = mappings
+      .filter(m => m.classId === classId)
+      .reduce((sum, m) => sum + m.weeklyHours, 0);
+    
+    // Sınıfın toplam ders saati 45'ten az ise uyarı ver
+    if (classAssignedHours < 45) {
+      console.warn(`⚠️ ${classItem?.name || classId} sınıfı için toplam atanan ders saati 45'ten az: ${classAssignedHours} saat`);
+    }
     
     // Öncelik değerini belirle
     let priority = 5; // Varsayılan öncelik
@@ -244,8 +249,7 @@ export async function generateSystematicSchedule(
       }
       
       // Sınıfın 45 saate ne kadar yakın olduğuna göre öncelik belirle
-      const currentClassHours = classWeeklyHours.get(mapping.classId) || 0;
-      const targetClassHours = classTargetHours.get(mapping.classId) || 45;
+      const targetClassHours = 45; // Her sınıf için ZORUNLU 45 saat
       const remainingHours = targetClassHours - currentClassHours;
       
       if (remainingHours <= 5) {
@@ -262,7 +266,9 @@ export async function generateSystematicSchedule(
     // Dağıtım şekli kontrolü
     let distribution: number[] = [];
     if (subject?.distributionPattern && globalRules.useDistributionPatterns) {
-      distribution = subjectDistributions.get(subject.id) || [];
+      // Dağıtım şekli varsa kullan
+      const parsedDistribution = subjectDistributions.get(subject.id) || [];
+      distribution = [...parsedDistribution]; // Kopya oluştur
       if (distribution.length > 0) {
         console.log(`🔄 ${subject.name} dersi için dağıtım şekli kullanılıyor: ${distribution.join('+')}`);
       }
@@ -271,6 +277,7 @@ export async function generateSystematicSchedule(
     }
     console.log(`📚 ${subject?.name || 'Bilinmeyen'} dersi için dağıtım: ${distribution.join('+') || 'Yok'}`);
     
+    // Dağıtım şekli varsa ve kullanılabilirse, blok olarak yerleştir
     if (distribution.length > 0 && globalRules.useDistributionPatterns) {
         distribution.forEach((block, index) => {
             if (block > 0 && hoursLeft >= block) {
@@ -279,15 +286,38 @@ export async function generateSystematicSchedule(
             }
         });
     }
-    for (let i = 0; i < hoursLeft; i++) {
-        allTasks.push(createTask(1, 'single', i));
+    
+    // Kalan saatleri mümkün olduğunca blok halinde yerleştir
+    if (hoursLeft > 0) {
+      // Blok büyüklükleri: 2, 3, 1 (öncelik sırasına göre)
+      const blockSizes = [2, 3, 1];
+      let remainingHours = hoursLeft;
+      let blockIndex = 0;
+      
+      while (remainingHours > 0) {
+        // Mevcut blok büyüklüğü
+        const currentBlockSize = blockSizes[blockIndex % blockSizes.length];
+        
+        // Eğer kalan saat sayısı blok büyüklüğünden az ise, tek saatlik blok oluştur
+        if (remainingHours < currentBlockSize) {
+          allTasks.push(createTask(1, 'single', blockIndex));
+          remainingHours -= 1;
+        } 
+        // Aksi halde, mevcut blok büyüklüğünde blok oluştur
+        else {
+          allTasks.push(createTask(currentBlockSize, 'single', blockIndex));
+          remainingHours -= currentBlockSize;
+        }
+        
+        blockIndex++;
+      }
     }
   });
   
   // Görevleri önceliğe göre sırala
   allTasks.sort((a, b) => {
     // 1. Önce önceliğe göre sırala (düşük değer = yüksek öncelik)
-    if (a.priority !== b.priority) {
+    if (a.priority !== b.priority) { 
       return a.priority - b.priority;
     }
     // 2. Sınıf hedef önceliğine göre sırala (45 saate yaklaşan sınıflar önce)
@@ -709,8 +739,8 @@ export async function generateSystematicSchedule(
   // Yerleştirilemeyen dersleri raporla
   const unassignedLessonsMap = new Map<string, UnassignedLesson>();
   allTasks.filter(task => !task.isPlaced).forEach(task => {
-    const { mapping, blockLength } = task;
-    const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}-${blockLength}`;
+    const { mapping } = task;
+    const key = `${mapping.classId}-${mapping.subjectId}-${mapping.teacherId}`;
     const classItem = allClasses.find(c => c.id === mapping.classId);  
     const subject = allSubjects.find(s => s.id === mapping.subjectId);  
     const teacher = allTeachers.find(t => t.id === mapping.teacherId);  
@@ -731,7 +761,7 @@ export async function generateSystematicSchedule(
       const lesson = unassignedLessonsMap.get(key);
       if(lesson) {
         // Blok uzunluğunu ekle
-        lesson.missingHours += blockLength;
+        lesson.missingHours += task.blockLength;
       }
     }
   });
@@ -739,8 +769,8 @@ export async function generateSystematicSchedule(
   const unassignedLessons = Array.from(unassignedLessonsMap.values());
   const warnings: string[] = [];
   if (unassignedLessons.length > 0) { 
-      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0);
-      warnings.push(`Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
+      const totalMissingHours = unassignedLessons.reduce((sum, l) => sum + l.missingHours, 0); 
+      warnings.push(`UYARI: Tüm ders saatleri yerleştirilemedi. ${unassignedLessons.length} ders (${totalMissingHours} saat) yerleştirilemedi.`);
       
       // Yerleştirilemeyen dersleri eğitim seviyesi ve sınıf öğretmeni önceliğine göre sırala
       unassignedLessons.sort((a, b) => {
@@ -771,16 +801,14 @@ export async function generateSystematicSchedule(
   // Sınıf ve öğretmen haftalık ders saati istatistikleri
   console.log('📊 Sınıf haftalık ders saatleri:');
   classWeeklyHours.forEach((hours, classId) => {
-    const classItem = allClasses.find(c => c.id === classId);
+    const classItem = allClasses.find(c => c.id === classId); 
     if (classItem) {
-      const targetHours = classTargetHours.get(classId) || 45;  
+      const targetHours = 45; // ZORUNLU 45 saat
       const percentage = Math.round(hours/targetHours*100);
       console.log(`${classItem.name}: ${hours}/${targetHours} saat (${percentage}%) - ${targetHours - hours} saat eksik`);
       if (hours < targetHours) {
-        // Sadece %80'in altındaki sınıflar için uyarı göster
-        if (percentage < 80) {
-          warnings.push(`${classItem.name} sınıfı için haftalık ders saati ${targetHours}'in çok altında: ${hours} saat (${percentage}%)`);
-        }
+        // Her sınıf için 45 saat zorunlu olduğundan, eksik olan her sınıf için uyarı göster
+        warnings.push(`${classItem.name} sınıfı için haftalık ders saati 45'in altında: ${hours} saat (${percentage}%)`);
       }
     }
   });
@@ -800,6 +828,31 @@ export async function generateSystematicSchedule(
       }
     }
   });
+
+  // Genel istatistikler
+  const overallPercentage = Math.round(placedLessons/totalLessonsToPlace*100);
+  console.log(`📊 Genel İstatistikler: ${placedLessons}/${totalLessonsToPlace} ders saati yerleştirildi (${overallPercentage}%)`);
+  console.log(`📊 Yerleştirilen görev sayısı: ${placedTasksCount}/${allTasks.length} (${Math.round(placedTasksCount/allTasks.length*100)}%)`); 
+  
+  // 45 saat hedefine ulaşmayan sınıfları raporla
+  const classesBelow45Hours = Array.from(classWeeklyHours.entries())
+    .filter(([_, hours]) => hours < 45)
+    .map(([classId, hours]) => {
+      const classItem = allClasses.find(c => c.id === classId);
+      return {
+        className: classItem?.name || classId,
+        hours,
+        percentage: Math.round((hours / 45) * 100)
+      };
+    });
+  
+  if (classesBelow45Hours.length > 0) {
+    console.warn('⚠️ 45 saat hedefine ulaşmayan sınıflar:');
+    classesBelow45Hours.forEach(c => {
+      console.warn(`${c.className}: ${c.hours}/45 saat (${c.percentage}%)`);
+      warnings.push(`KRİTİK: ${c.className} sınıfı 45 saat zorunluluğunu karşılamıyor: ${c.hours} saat (${c.percentage}%)`);
+    });
+  }
 
   console.log(`✅ Program oluşturma tamamlandı. Süre: ${(Date.now() - startTime) / 1000} saniye. Sonuç: ${placedLessons} / ${totalLessonsToPlace} (${Math.round(placedLessons/totalLessonsToPlace*100)}%)`);
 
