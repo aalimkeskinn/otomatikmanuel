@@ -73,37 +73,305 @@ const DataManagement = () => {
   // YENİ: Veri sağlığı kontrolü için state
   const [healthCheckResults, setHealthCheckResults] = useState<{ overbookedTeachers: { name: string; totalHours: number }[] }>({ overbookedTeachers: [] });
   const [isHealthCheckModalOpen, setIsHealthCheckModalOpen] = useState(false);
+  const [isAnalyzingData, setIsAnalyzingData] = useState(false);
 
   // YENİ: Veri Sağlığı Kontrolü Fonksiyonu
   const runDataHealthCheck = () => {
+    setIsAnalyzingData(true);
+    info("Veri Analizi Başlatıldı", "Sistem verileri analiz ediliyor...");
+    
     const teacherHours = new Map<string, number>();
+    const classHours = new Map<string, number>();
+    const classTeacherAssignments = new Map<string, Set<string>>();
+    const subjectDistributions = new Map<string, boolean>();
 
     // Sınıflardaki atamalardan öğretmenlerin toplam saatini hesapla
     classes.forEach(c => {
+      let classTotal = 0;
+      
+      // Sınıf öğretmeni kontrolü
+      if (c.classTeacherId) {
+        if (!classTeacherAssignments.has(c.id)) {
+          classTeacherAssignments.set(c.id, new Set());
+        }
+        classTeacherAssignments.get(c.id)!.add(c.classTeacherId);
+      }
+      
       c.assignments?.forEach(assignment => {
         const teacherId = assignment.teacherId;
         assignment.subjectIds.forEach(subjectId => {
           const subject = subjects.find(s => s.id === subjectId);
           if (subject) {
+            // Öğretmen saatleri
             const currentHours = teacherHours.get(teacherId) || 0;
             teacherHours.set(teacherId, currentHours + subject.weeklyHours);
+            
+            // Sınıf saatleri
+            classTotal += subject.weeklyHours;
+            
+            // Dağıtım şekli kontrolü
+            if (subject.distributionPattern) {
+              subjectDistributions.set(subject.id, true);
+            }
+            
+            // Sınıf öğretmeni atama kontrolü
+            if (c.classTeacherId === teacherId) {
+              classTeacherAssignments.get(c.id)!.add(teacherId);
+            }
           }
         });
       });
+      
+      // Sınıf toplam saati
+      classHours.set(c.id, classTotal);
     });
 
-    const overbookedTeachers: { name: string; totalHours: number }[] = [];
+    // Analiz sonuçları
+    const overbookedTeachers: { name: string; totalHours: number; overBy: number }[] = [];
+    const underloadedClasses: { name: string; totalHours: number; underBy: number }[] = [];
+    const overloadedClasses: { name: string; totalHours: number; overBy: number }[] = [];
+    const classesWithoutTeachers: { name: string }[] = [];
+    const classesWithoutClassTeacher: { name: string }[] = [];
+    
+    // Öğretmen yük analizi
     teacherHours.forEach((totalHours, teacherId) => {
       if (totalHours > 45) { // Haftalık 45 saat limiti
         const teacher = teachers.find(t => t.id === teacherId);
         if (teacher) {
-          overbookedTeachers.push({ name: teacher.name, totalHours });
+          overbookedTeachers.push({ 
+            name: teacher.name, 
+            totalHours,
+            overBy: totalHours - 45
+          });
         }
       }
     });
-
-    setHealthCheckResults({ overbookedTeachers });
+    
+    // Sınıf ders saati analizi
+    classHours.forEach((totalHours, classId) => {
+      const classItem = classes.find(c => c.id === classId);
+      if (!classItem) return;
+      
+      if (totalHours < 45) {
+        underloadedClasses.push({
+          name: classItem.name,
+          totalHours,
+          underBy: 45 - totalHours
+        });
+      } else if (totalHours > 45) {
+        overloadedClasses.push({
+          name: classItem.name,
+          totalHours,
+          overBy: totalHours - 45
+        });
+      }
+      
+      // Sınıf öğretmeni kontrolü
+      if (!classItem.classTeacherId) {
+        classesWithoutClassTeacher.push({ name: classItem.name });
+      }
+      
+      // Öğretmen ataması kontrolü
+      if (!classItem.assignments || classItem.assignments.length === 0) {
+        classesWithoutTeachers.push({ name: classItem.name });
+      }
+    });
+    
+    // Sonuçları state'e kaydet
+    setHealthCheckResults({ 
+      overbookedTeachers,
+      underloadedClasses,
+      overloadedClasses,
+      classesWithoutTeachers,
+      classesWithoutClassTeacher,
+      subjectDistributions: Array.from(subjectDistributions.entries())
+    });
+    
+    // Analiz tamamlandı
+    setIsAnalyzingData(false);
+    
+    // Sonuçları göster
+    if (overbookedTeachers.length === 0 && 
+        underloadedClasses.length === 0 && 
+        overloadedClasses.length === 0 && 
+        classesWithoutTeachers.length === 0) {
+      success("✅ Veri Sağlığı İyi", "Sistem verilerinde önemli bir sorun tespit edilmedi.");
+    } else {
+      let problemCount = 0;
+      if (overbookedTeachers.length > 0) problemCount += overbookedTeachers.length;
+      if (underloadedClasses.length > 0) problemCount += underloadedClasses.length;
+      if (overloadedClasses.length > 0) problemCount += overloadedClasses.length;
+      if (classesWithoutTeachers.length > 0) problemCount += classesWithoutTeachers.length;
+      
+      warning("⚠️ Veri Sorunları Tespit Edildi", `${problemCount} potansiyel sorun tespit edildi. Detaylar için sonuçları inceleyin.`);
+    }
+    
     setIsHealthCheckModalOpen(true);
+  };
+
+  // Veri sağlığı sonuçlarını göster
+  const renderHealthCheckResults = () => {
+    const { 
+      overbookedTeachers, 
+      underloadedClasses, 
+      overloadedClasses,
+      classesWithoutTeachers,
+      classesWithoutClassTeacher
+    } = healthCheckResults;
+    
+    const hasProblems = overbookedTeachers?.length > 0 || 
+                       underloadedClasses?.length > 0 || 
+                       overloadedClasses?.length > 0 || 
+                       classesWithoutTeachers?.length > 0 ||
+                       classesWithoutClassTeacher?.length > 0;
+    
+    if (!hasProblems) {
+      return (
+        <div className="text-center p-6">
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">Her Şey Yolunda!</h3>
+          <p className="text-gray-600 mt-2">Sistem verilerinde önemli bir sorun tespit edilmedi. Program oluşturmaya hazırsınız.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Aşırı yüklü öğretmenler */}
+        {overbookedTeachers?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-red-800 flex items-center">
+              <XCircle className="w-5 h-5 mr-2 text-red-600" />
+              Aşırı Yüklü Öğretmenler ({overbookedTeachers.length})
+            </h3>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700 mb-3">
+                Aşağıdaki öğretmenlerin haftalık ders yükleri 45 saati aşıyor. Bu durum program oluşturmayı imkansız hale getirebilir.
+              </p>
+              <ul className="divide-y divide-red-200">
+                {overbookedTeachers.map(teacher => (
+                  <li key={teacher.name} className="py-2 flex justify-between items-center">
+                    <span className="font-medium">{teacher.name}</span>
+                    <div className="flex items-center">
+                      <span className="bg-red-100 text-red-800 text-sm font-semibold px-3 py-1 rounded-full">
+                        {teacher.totalHours} saat
+                      </span>
+                      <span className="ml-2 text-xs text-red-600">
+                        (+{teacher.overBy})
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Eksik ders saati olan sınıflar */}
+        {underloadedClasses?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-orange-800 flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2 text-orange-600" />
+              Eksik Ders Saati Olan Sınıflar ({underloadedClasses.length})
+            </h3>
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-sm text-orange-700 mb-3">
+                Aşağıdaki sınıfların haftalık ders saatleri 45'in altında. Her sınıf için 45 saat zorunludur.
+              </p>
+              <ul className="divide-y divide-orange-200">
+                {underloadedClasses.map(cls => (
+                  <li key={cls.name} className="py-2 flex justify-between items-center">
+                    <span className="font-medium">{cls.name}</span>
+                    <div className="flex items-center">
+                      <span className="bg-orange-100 text-orange-800 text-sm font-semibold px-3 py-1 rounded-full">
+                        {cls.totalHours} saat
+                      </span>
+                      <span className="ml-2 text-xs text-orange-600">
+                        (-{cls.underBy})
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Fazla ders saati olan sınıflar */}
+        {overloadedClasses?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-yellow-800 flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2 text-yellow-600" />
+              Fazla Ders Saati Olan Sınıflar ({overloadedClasses.length})
+            </h3>
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-700 mb-3">
+                Aşağıdaki sınıfların haftalık ders saatleri 45'in üzerinde. Bu durum program oluşturmayı zorlaştırabilir.
+              </p>
+              <ul className="divide-y divide-yellow-200">
+                {overloadedClasses.map(cls => (
+                  <li key={cls.name} className="py-2 flex justify-between items-center">
+                    <span className="font-medium">{cls.name}</span>
+                    <div className="flex items-center">
+                      <span className="bg-yellow-100 text-yellow-800 text-sm font-semibold px-3 py-1 rounded-full">
+                        {cls.totalHours} saat
+                      </span>
+                      <span className="ml-2 text-xs text-yellow-600">
+                        (+{cls.overBy})
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Öğretmen ataması olmayan sınıflar */}
+        {classesWithoutTeachers?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-red-800 flex items-center">
+              <XCircle className="w-5 h-5 mr-2 text-red-600" />
+              Öğretmen Ataması Olmayan Sınıflar ({classesWithoutTeachers.length})
+            </h3>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700 mb-3">
+                Aşağıdaki sınıflara hiç öğretmen ataması yapılmamış. Bu sınıflar için program oluşturulamaz.
+              </p>
+              <ul className="divide-y divide-red-200">
+                {classesWithoutTeachers.map(cls => (
+                  <li key={cls.name} className="py-2">
+                    <span className="font-medium">{cls.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Sınıf öğretmeni olmayan sınıflar */}
+        {classesWithoutClassTeacher?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-yellow-800 flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2 text-yellow-600" />
+              Sınıf Öğretmeni Olmayan Sınıflar ({classesWithoutClassTeacher.length})
+            </h3>
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-700 mb-3">
+                Aşağıdaki sınıfların sınıf öğretmeni atanmamış. Bu durum program oluşturmayı etkilemez ancak sınıf yönetimi için önemlidir.
+              </p>
+              <ul className="divide-y divide-yellow-200">
+                {classesWithoutClassTeacher.map(cls => (
+                  <li key={cls.name} className="py-2">
+                    <span className="font-medium">{cls.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
 
@@ -300,7 +568,15 @@ const DataManagement = () => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center mb-4"><HeartPulse className="w-6 h-6 text-green-500 mr-3" /><h2 className="text-lg font-bold text-gray-900">Veri Sağlığı Kontrolü</h2></div>
             <p className="text-sm text-gray-600 mb-4">Program oluşturmadan önce, öğretmenlerin ders yükleri gibi olası mantık hatalarını kontrol edin.</p>
-            <Button onClick={runDataHealthCheck} icon={HeartPulse} variant="secondary" className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">Kontrolü Başlat</Button>
+            <Button 
+              onClick={runDataHealthCheck} 
+              icon={HeartPulse} 
+              variant="secondary" 
+              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+              disabled={isAnalyzingData}
+            >
+              {isAnalyzingData ? "Analiz Ediliyor..." : "Veri Sağlığını Kontrol Et"}
+            </Button>
           </div>
         </div>
         
@@ -362,30 +638,7 @@ const DataManagement = () => {
       
       {/* YENİ: Veri Sağlığı Kontrolü Modalı */}
       <Modal isOpen={isHealthCheckModalOpen} onClose={() => setIsHealthCheckModalOpen(false)} title="Veri Sağlığı Kontrol Sonuçları">
-        {healthCheckResults.overbookedTeachers.length === 0 ? (
-          <div className="text-center p-6">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">Her Şey Yolunda!</h3>
-            <p className="text-gray-600 mt-2">Öğretmenlerin ders yüklerinde herhangi bir mantıksal hata bulunamadı. Program oluşturmaya hazırsınız.</p>
-          </div>
-        ) : (
-          <div>
-            <div className="p-4 bg-red-50 border-l-4 border-red-400 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0"><XCircle className="h-5 w-5 text-red-400" /></div>
-                <div className="ml-3"><p className="text-sm text-red-700">Aşağıdaki öğretmenlerin haftalık ders yükleri 45 saati aşıyor. Bu durum program oluşturulmasını imkansız hale getirebilir.</p></div>
-              </div>
-            </div>
-            <ul className="divide-y divide-gray-200">
-              {healthCheckResults.overbookedTeachers.map(teacher => (
-                <li key={teacher.name} className="py-3 flex justify-between items-center">
-                  <span className="font-medium">{teacher.name}</span>
-                  <span className="bg-red-100 text-red-800 text-sm font-semibold px-3 py-1 rounded-full">{teacher.totalHours} saat</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {renderHealthCheckResults()}
         <div className="mt-6 flex justify-end">
           <Button onClick={() => setIsHealthCheckModalOpen(false)} variant="primary">Kapat</Button>
         </div>
