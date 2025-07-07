@@ -93,33 +93,33 @@ const Toast: React.FC<ToastProps> = ({
   return (
     <div
       className={`
-        w-full bg-white pointer-events-auto transform transition-all duration-500 ease-out relative overflow-hidden
+        w-full bg-white pointer-events-auto transform transition-all duration-300 ease-out relative overflow-hidden
         ${colors[type]}
         ${isVisible && !isLeaving ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'}
-        ${type === 'error' ? 'ring-8 ring-ide-accent-400 ring-opacity-75 shadow-ide-2xl' : 'shadow-ide-xl'}
-        hover:shadow-ide-2xl hover:scale-105 rounded-xl border-l-8
+        ${type === 'error' ? 'ring-4 ring-ide-accent-400 ring-opacity-75 shadow-ide-2xl' : 'shadow-ide-xl'}
+        hover:shadow-ide-2xl hover:scale-[1.03] rounded-xl border-l-8
       `}
       style={{
-        minHeight: type === 'error' ? '120px' : '90px',
+        minHeight: type === 'error' ? '110px' : '85px',
         maxWidth: '400px',
         zIndex: 2147483647,
         position: 'relative',
         // Special styling for error toasts
         ...(type === 'error' && {
-          animation: 'shake 0.6s ease-in-out, glow 2s ease-in-out infinite',
-          boxShadow: '0 25px 50px -12px rgba(220, 38, 38, 0.5), 0 0 0 4px rgba(220, 38, 38, 0.2), 0 0 30px rgba(220, 38, 38, 0.4)'
+          animation: 'shake 0.5s ease-in-out, glow 2s ease-in-out infinite',
+          boxShadow: '0 20px 40px -10px rgba(220, 38, 38, 0.5), 0 0 0 3px rgba(220, 38, 38, 0.2), 0 0 25px rgba(220, 38, 38, 0.4)'
         })
       }}
     >
       {/* Error toast special background */}
       {type === 'error' && (
-        <div className="absolute inset-0 bg-gradient-to-r from-ide-accent-100 via-ide-accent-50 to-ide-accent-100 animate-pulse opacity-60"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-ide-accent-100 via-ide-accent-50 to-ide-accent-100 animate-pulse opacity-50"></div>
       )}
       
-      <div className="p-6 relative z-10">
+      <div className="p-5 relative z-10">
         <div className="flex items-start">
           <div className="flex-shrink-0">
-            <Icon className={`h-8 w-8 ${iconColors[type]} ${type === 'error' ? 'animate-bounce' : ''}`} />
+            <Icon className={`h-7 w-7 ${iconColors[type]} ${type === 'error' ? 'animate-bounce' : ''}`} />
           </div>
           <div className="ml-4 w-0 flex-1">
             <p className={`text-lg font-bold leading-tight ${
@@ -128,7 +128,7 @@ const Toast: React.FC<ToastProps> = ({
               {title}
             </p>
             {message && (
-              <p className={`mt-3 text-sm leading-relaxed whitespace-pre-line ${
+              <p className={`mt-2 text-sm leading-relaxed whitespace-pre-line ${
                 type === 'error' ? 'text-ide-accent-800 font-semibold' : 'text-ide-gray-700'
               }`}>
                 {message}
@@ -144,7 +144,7 @@ const Toast: React.FC<ToastProps> = ({
                   : 'text-ide-gray-400 hover:text-ide-gray-600 hover:bg-ide-gray-100 focus:ring-ide-primary-500'
               }`}
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -152,7 +152,7 @@ const Toast: React.FC<ToastProps> = ({
       
       {/* Progress bar */}
       {duration > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-3 bg-ide-gray-200 overflow-hidden">
+        <div className="absolute bottom-0 left-0 right-0 h-2 bg-ide-gray-200 overflow-hidden">
           <div 
             className={`h-full transition-all ease-linear ${progressColors[type]}`}
             style={{
@@ -165,7 +165,7 @@ const Toast: React.FC<ToastProps> = ({
 
       {/* Error toast special effects */}
       {type === 'error' && (
-        <div className="absolute -inset-2 bg-ide-accent-500 rounded-xl blur-sm opacity-20 animate-pulse -z-10"></div>
+        <div className="absolute -inset-1 bg-ide-accent-500 rounded-xl blur-sm opacity-15 animate-pulse -z-10"></div>
       )}
     </div>
   );

@@ -14,6 +14,8 @@ interface SelectProps {
   required?: boolean;
   error?: string;
   disabled?: boolean;
+  className?: string;
+  hint?: string;
 }
 
 const Select: React.FC<SelectProps> = ({
@@ -23,7 +25,9 @@ const Select: React.FC<SelectProps> = ({
   options,
   required = false,
   error,
-  disabled = false
+  disabled = false,
+  className = '',
+  hint
 }) => {
   return (
     <div className="mb-4">
@@ -37,6 +41,7 @@ const Select: React.FC<SelectProps> = ({
           required={required}
           disabled={disabled}
           className={`ide-input w-full appearance-none bg-white ${
+            className} ${
             error 
               ? 'border-ide-accent-400 bg-ide-accent-50 focus:border-ide-accent-500 focus:ring-ide-accent-200 text-ide-accent-900' 
               : disabled
@@ -65,6 +70,12 @@ const Select: React.FC<SelectProps> = ({
           <p className="text-sm font-medium text-ide-accent-700">{error}</p>
         </div>
       )}
+      
+      {/* Yeni: İpucu metni */}
+      {hint && !error && (
+        <p className="mt-1 text-xs text-gray-500">{hint}</p>
+      )}
+      
     </div>
   );
 };

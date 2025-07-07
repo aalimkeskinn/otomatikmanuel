@@ -5,17 +5,22 @@
 /* İDE OKULLARI KURUMSAL RENK PALETİ */
 :root {
   /* GERÇEK İDE OKULLARI KURUMSAL RENKLERİ */
-  --ide-primary: #006EB7;      /* Ana mavi - logo ana rengi */
-  --ide-primary-light: #3B9AE1; /* Açık mavi */
-  --ide-primary-dark: #004A80;  /* Koyu mavi */
+  --ide-primary: #006EB7;       /* Ana mavi - logo ana rengi */
+  --ide-primary-light: #3B9AE1;  /* Açık mavi */
+  --ide-primary-dark: #004A80;   /* Koyu mavi */
   
-  --ide-secondary: #279C38;     /* Yeşil - logo ikinci rengi */
-  --ide-secondary-light: #4CAF50; /* Açık yeşil */
-  --ide-secondary-dark: #1B5E20;  /* Koyu yeşil */
+  --ide-secondary: #279C38;      /* Yeşil - logo ikinci rengi */
+  --ide-secondary-light: #4CAF50;  /* Açık yeşil */
+  --ide-secondary-dark: #1B5E20;   /* Koyu yeşil */
   
-  --ide-accent: #E84D0D;        /* Kırmızı/Turuncu - logo vurgu rengi */
-  --ide-accent-light: #FF6F47;  /* Açık kırmızı/turuncu */
-  --ide-accent-dark: #BF360C;   /* Koyu kırmızı/turuncu */
+  --ide-accent: #E84D0D;         /* Kırmızı/Turuncu - logo vurgu rengi */
+  --ide-accent-light: #FF6F47;   /* Açık kırmızı/turuncu */
+  --ide-accent-dark: #BF360C;    /* Koyu kırmızı/turuncu */
+  
+  /* Turuncu tonları - ek vurgu rengi */
+  --ide-orange: #FF9800;
+  --ide-orange-light: #FFB74D;
+  --ide-orange-dark: #F57C00;
   
   /* Nötr Renkler */
   --ide-gray-50: #f8fafc;
@@ -384,13 +389,13 @@
   /* CRITICAL: Mobile-optimized cards with IDE styling */
   .mobile-card {
     @apply rounded-lg shadow-sm border bg-white;
-    border-color: var(--ide-gray-200);
+    border-color: var(--ide-gray-200); 
     transition: all 0.2s ease;
   }
   
   .mobile-card:hover {
-    border-color: var(--ide-primary-light);
-    box-shadow: 0 4px 12px rgba(0, 110, 183, 0.15);
+    border-color: var(--ide-primary-light); 
+    box-shadow: 0 4px 12px rgba(0, 110, 183, 0.15); 
   }
   
   /* CRITICAL: Responsive grid improvements */
@@ -665,62 +670,108 @@
 /* IDE Corporate Button Variants */
 .btn-ide-primary {
   background-color: var(--ide-primary);
-  color: white;
+  color: white; 
   border: 2px solid var(--ide-primary);
 }
 
 .btn-ide-primary:hover {
   background-color: var(--ide-primary-dark);
-  border-color: var(--ide-primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 110, 183, 0.3);
+  border-color: var(--ide-primary-dark); 
+  transform: translateY(-1px); 
+  box-shadow: 0 4px 12px rgba(0, 110, 183, 0.3); 
 }
 
 .btn-ide-secondary {
   background-color: var(--ide-secondary);
-  color: white;
+  color: white; 
   border: 2px solid var(--ide-secondary);
 }
 
 .btn-ide-secondary:hover {
   background-color: var(--ide-secondary-dark);
-  border-color: var(--ide-secondary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(39, 156, 56, 0.3);
+  border-color: var(--ide-secondary-dark); 
+  transform: translateY(-1px); 
+  box-shadow: 0 4px 12px rgba(39, 156, 56, 0.3); 
 }
 
 .btn-ide-accent {
   background-color: var(--ide-accent);
-  color: white;
+  color: white; 
   border: 2px solid var(--ide-accent);
 }
 
 .btn-ide-accent:hover {
   background-color: var(--ide-accent-dark);
-  border-color: var(--ide-accent-dark);
+  border-color: var(--ide-accent-dark); 
+  transform: translateY(-1px); 
+  box-shadow: 0 4px 12px rgba(232, 77, 13, 0.3); 
+}
+
+/* YENİ: Turuncu buton varyantı */
+.btn-ide-orange {
+  background-color: var(--ide-orange);
+  color: white;
+  border: 2px solid var(--ide-orange);
+}
+
+.btn-ide-orange:hover {
+  background-color: var(--ide-orange-dark);
+  border-color: var(--ide-orange-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(232, 77, 13, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
 }
 
 /* IDE Corporate Form Styling */
 .ide-input {
   border: 2px solid var(--ide-gray-300);
   border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 16px;
-  transition: all 0.2s ease;
-  min-height: 48px; /* Mobile-friendly */
+  padding: 12px 16px; 
+  font-size: 16px; 
+  transition: all 0.2s ease; 
+  min-height: 48px;  /* Mobile-friendly */
 }
 
 .ide-input:focus {
   border-color: var(--ide-primary);
-  box-shadow: 0 0 0 3px rgba(0, 110, 183, 0.1);
-  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 110, 183, 0.1); 
+  outline: none; 
 }
 
 .ide-input:invalid {
   border-color: var(--ide-accent);
-  box-shadow: 0 0 0 3px rgba(232, 77, 13, 0.1);
+  box-shadow: 0 0 0 3px rgba(232, 77, 13, 0.1); 
+}
+
+/* YENİ: Gelişmiş kart stilleri */
+.ide-card {
+  background-color: white;
+  border-radius: 12px;
+  border: 1px solid var(--ide-gray-200);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.ide-card:hover {
+  box-shadow: 0 8px 16px rgba(0, 110, 183, 0.1);
+  transform: translateY(-2px);
+  border-color: var(--ide-primary-100);
+}
+
+.ide-card-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--ide-gray-100);
+  background-color: var(--ide-gray-50);
+}
+
+.ide-card-body {
+  padding: 16px;
+}
+
+.ide-card-footer {
+  padding: 16px;
+  border-top: 1px solid var(--ide-gray-100);
+  background-color: var(--ide-gray-50);
 }
 
 /* CRITICAL: Mobile table scroll enhancement */

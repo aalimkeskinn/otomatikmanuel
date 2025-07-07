@@ -16,42 +16,42 @@ const Sidebar = () => {
       to: '/', 
       icon: Home, 
       label: 'Anasayfa', 
-      color: 'ide-primary',
+      color: 'bg-ide-primary-100 text-ide-primary-600',
       description: 'Ana kontrol paneli'
     },
     { 
       to: '/schedule-wizard', 
       icon: Zap, 
       label: 'Program Sihirbazı', 
-      color: 'ide-accent',
+      color: 'bg-ide-accent-100 text-ide-accent-600',
       description: 'Otomatik program oluştur'
     },
     { 
       to: '/schedules', 
       icon: Calendar, 
       label: 'Manuel Program', 
-      color: 'ide-accent',
+      color: 'bg-ide-accent-100 text-ide-accent-600',
       description: 'Manuel program oluştur'
     },
     { 
       to: '/class-schedules', 
       icon: GraduationCap, 
       label: 'Sınıf Programları', 
-      color: 'ide-secondary',
+      color: 'bg-ide-secondary-100 text-ide-secondary-600',
       description: 'Sınıf bazlı görünüm'
     },
     { 
       to: '/all-schedules', 
       icon: Eye, 
       label: 'Öğretmen Programları', 
-      color: 'ide-primary',
+      color: 'bg-ide-primary-100 text-ide-primary-600',
       description: 'Öğretmen bazlı görünüm'
     },
     { 
       to: '/data-management', 
       icon: Database, 
       label: 'Veri Yönetimi', 
-      color: 'ide-primary',
+      color: 'bg-purple-100 text-purple-600',
       description: 'Sistem verilerini yönet'
 
     },
@@ -60,7 +60,7 @@ const Sidebar = () => {
       to: '/pdf', 
       icon: Calendar, 
       label: 'PDF Çıktı', 
-      color: 'ide-orange',
+      color: 'bg-orange-100 text-orange-600',
       description: 'Rapor ve çıktılar'
     }
   ];
@@ -170,13 +170,13 @@ const Sidebar = () => {
                   <>
                     {/* Active Indicator */}
                     {isActive && (
-                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-ide-primary-600 rounded-r-full"></div>
+                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1.5 h-8 bg-gradient-to-b from-ide-primary-400 to-ide-primary-600 rounded-r-full"></div>
                     )}
                     
                     {/* Icon Container */}
                     <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
                       isActive 
-                        ? 'bg-ide-primary-100 text-ide-primary-600' 
+                        ? color
                         : 'bg-gray-100 text-gray-500 group-hover:bg-ide-primary-100 group-hover:text-ide-primary-600'
                     }`}>
                       <Icon size={24} className="transition-transform duration-300 group-hover:scale-110" />

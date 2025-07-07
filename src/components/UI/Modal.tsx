@@ -6,7 +6,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
@@ -41,7 +41,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     sm: 'sm:max-w-md',
     md: 'sm:max-w-lg',
     lg: 'sm:max-w-2xl',
-    xl: 'sm:max-w-4xl'
+    xl: 'sm:max-w-4xl',
+    full: 'sm:max-w-7xl'
   };
 
   return (
@@ -62,28 +63,25 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
           inline-block align-bottom bg-white text-left overflow-hidden shadow-2xl transform transition-all 
           sm:my-8 sm:align-middle sm:w-full ${sizeClasses[size]}
           
-          /* MOBILE OPTIMIZATIONS */
           w-full max-w-none mx-0 mb-0
           sm:mx-4 sm:mb-4 sm:max-w-lg
           
-          /* MOBILE: Full width with rounded top corners */
           rounded-t-2xl sm:rounded-xl
           
-          /* MOBILE: Better height management */
-          max-h-[95vh] sm:max-h-[90vh]
+          /* İyileştirilmiş yükseklik yönetimi */
+          max-h-[90vh] sm:max-h-[85vh]
           
-          /* MOBILE: Ensure proper positioning */
           modal-mobile
         `}>
-          {/* Header - Mobile optimized */}
-          <div className="bg-white px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-gray-200 sticky top-0 z-10">
+          {/* İyileştirilmiş Başlık */}
+          <div className="bg-gradient-to-r from-ide-primary-50 to-white px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-gray-200 sticky top-0 z-10">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 pr-4 truncate">
+              <h3 className="text-lg sm:text-xl font-bold text-ide-primary-800 pr-4 truncate">
                 {title}
               </h3>
               <button
                 onClick={onClose}
-                className="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 btn-touch flex-shrink-0"
+                className="rounded-lg p-2 text-gray-400 hover:text-ide-primary-600 hover:bg-ide-primary-50 focus:outline-none focus:ring-2 focus:ring-ide-primary-500 focus:ring-offset-2 transition-all duration-200 btn-touch flex-shrink-0"
                 aria-label="Modalı kapat"
               >
                 <X size={24} />
@@ -91,12 +89,19 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
             </div>
           </div>
           
-          {/* Content - Mobile optimized with proper scrolling */}
-          <div className="bg-white px-4 sm:px-6 py-4 sm:py-6 overflow-y-auto flex-1">
+          {/* İyileştirilmiş İçerik Alanı */}
+          <div className="bg-white px-4 sm:px-6 py-4 sm:py-6 overflow-y-auto flex-1 modal-content">
             <div className="form-mobile">
               {children}
             </div>
           </div>
+          
+          {/* Yeni: Opsiyonel Alt Bilgi Alanı */}
+          {size === 'full' && (
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 border-t border-gray-200 text-xs text-gray-500 text-center">
+              Tam ekran mod - Daha fazla içerik görüntülemek için
+            </div>
+          )}
         </div>
       </div>
     </div>
