@@ -22,9 +22,13 @@ export function createSubjectTeacherMappings(
   const mappings: SubjectTeacherMapping[] = [];
   const errors: string[] = [];
 
+  // Seçilen sınıflar, dersler ve öğretmenler
   const selectedClassIds = new Set(wizardData.classes.selectedClasses);
   const selectedSubjectIds = new Set(wizardData.subjects.selectedSubjects);
   const selectedTeacherIds = new Set(wizardData.teachers.selectedTeachers);
+
+  // Özel ders saatleri
+  const subjectHours = wizardData.subjects.subjectHours || {};
 
   // Kulüp derslerini tespit et
   const clubSubjectIds = new Set<string>();
@@ -42,6 +46,12 @@ export function createSubjectTeacherMappings(
     selectedTeachers: selectedTeacherIds.size
   });
 
+  // Sınıf bazında toplam ders saati takibi
+  const classWeeklyHours = new Map<string, number>();
+  selectedClassIds.forEach(classId => {
+    classWeeklyHours.set(classId, 0);
+  });
+
   // Her sınıf için atama kontrolü
   for (const classId of selectedClassIds) {
     const classItem = allClasses.find(c => c.id === classId);
@@ -49,6 +59,9 @@ export function createSubjectTeacherMappings(
       console.warn(`⚠️ Sınıf bulunamadı: ${classId}`);
       continue;
     }
+    
+    // Sınıfın toplam ders saati
+    let classTotal = 0;
     
     console.log(`🏫 Sınıf işleniyor: ${classItem.name}`, {
       assignments: classItem.assignments?.length || 0
@@ -104,7 +117,7 @@ export function createSubjectTeacherMappings(
         
         // Aynı eşleştirme daha önce eklendiyse atla
         const mappingExists = mappings.some(m => 
-          m.classId === classId && m.subjectId === subjectId
+          m.classId === classId && m.subjectId === subjectId && m.teacherId === teacherId
         );
         
         if (!mappingExists) {
@@ -112,6 +125,9 @@ export function createSubjectTeacherMappings(
           const weeklyHours = wizardData.subjects.subjectHours[subjectId] || subject.weeklyHours;
           
           // Dağıtım şekli
+          classTotal += weeklyHours;
+          classWeeklyHours.set(classId, (classWeeklyHours.get(classId) || 0) + weeklyHours);
+          
           const distribution = subject.distributionPattern 
             ? parseDistributionPattern(subject.distributionPattern) 
             : undefined;
@@ -143,6 +159,22 @@ export function createSubjectTeacherMappings(
       }
     }
   }
+
+  // Her sınıfın 45 saat zorunluluğunu kontrol et
+  classWeeklyHours.forEach((hours, classId) => {
+    const classItem = allClasses.find(c => c.id === classId);
+    if (!classItem) return;
+    
+    if (hours < 45) {
+      errors.push(`UYARI: ${classItem.name} sınıfı için toplam ders saati 45'in altında: ${hours} saat. Her sınıf için 45 saat zorunludur.`);
+    }
+    
+    if (hours > 45) {
+      errors.push(`UYARI: ${classItem.name} sınıfı için toplam ders saati 45'in üzerinde: ${hours} saat. Bu durum program oluşturmayı zorlaştırabilir.`);
+    }
+  });
+  
+  console.log('📊 Sınıf ders saatleri:', Object.fromEntries(classWeeklyHours));
   
   console.log(`📊 Eşleştirme sonuçları:`, {
     mappingsCount: mappings.length,

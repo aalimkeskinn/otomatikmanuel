@@ -147,6 +147,10 @@ const ScheduleWizard = () => {
   const handleGenerateSchedule = async () => {
     if (isGenerating) return;
     info("Program oluşturma başlatılıyor...", "Veriler kontrol ediliyor ve görevler oluşturuluyor.");
+    
+    // Önemli: Kullanıcıya bilgi ver
+    info("Önemli Bilgi", "Her sınıfın 45 saat dersi olması zorunludur ve dersler mümkün olduğunca blok halinde yerleştirilecektir.");
+    
     setIsGenerating(true);
     setGenerationResult(null);
 
@@ -154,13 +158,30 @@ const ScheduleWizard = () => {
       const { mappings, errors: mappingErrors } = createSubjectTeacherMappings(wizardData, teachers, classes, subjects);
       if (mappingErrors.length > 0) {
         error("Planlama Hatası", `Program oluşturulamadı:\n- ${mappingErrors.join('\n- ')}`);
-        setIsGenerating(false); return;
+        setIsGenerating(false); 
+        return;
       }
       if (mappings.length === 0) {
         error("Eşleştirme Hatası", "Hiçbir ders-öğretmen-sınıf eşleştirmesi yapılamadı. Lütfen seçimlerinizi kontrol edin.");
-        setIsGenerating(false); return;
+        setIsGenerating(false); 
+        return;
       }
-      const result = await generateSystematicSchedule(mappings, teachers, classes, subjects, wizardData.constraints?.timeConstraints || [], wizardData.constraints.globalRules);
+      
+      // Algoritma ayarlarını güncelle
+      const updatedGlobalRules = {
+        ...wizardData.constraints.globalRules,
+        preferBlockScheduling: true, // Derslerin blok halinde yerleştirilmesini zorla
+        useDistributionPatterns: true, // Dağıtım şekillerini kullan
+      };
+      
+      const result = await generateSystematicSchedule(
+        mappings, 
+        teachers, 
+        classes, 
+        subjects, 
+        wizardData.constraints?.timeConstraints || [], 
+        updatedGlobalRules
+      );
       
       if (!result || !result.schedules) {
           error("Oluşturma Hatası", "Algoritma beklenmedik bir sonuç döndürdü.");
@@ -175,7 +196,8 @@ const ScheduleWizard = () => {
       const { unassignedLessons, placedLessons, totalLessonsToPlace } = result.statistics;
       
       if (unassignedLessons.length > 0) {
-        warning("Eksik Dersler Mevcut", `${totalLessonsToPlace} dersten ${unassignedLessons.length} tanesi yerleştirilemedi. Lütfen eksikleri tamamlayın.`);
+        const totalMissingHours = unassignedLessons.reduce((sum, lesson) => sum + lesson.missingHours, 0);
+        warning("Eksik Dersler Mevcut", `${totalLessonsToPlace} ders saatinden ${totalMissingHours} saati yerleştirilemedi. Lütfen eksikleri tamamlayın.`);
       } else {
         success('🎉 Program Başarıyla Oluşturuldu!', `${result.schedules.length} öğretmen için program güncellendi.`);
       }

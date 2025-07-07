@@ -3,6 +3,7 @@
 import { DAYS, PERIODS, Schedule, Teacher, Class, Subject, parseDistributionPattern } from '../types';
 import { SubjectTeacherMapping, EnhancedGenerationResult, WizardData, UnassignedLesson } from '../types/wizard';
 import { TimeConstraint } from '../types/constraints';
+import { stringToHslColor } from './colorUtils';
 
 // Eğitim seviyesini belirlemek için yardımcı fonksiyon
 const LEVEL_ORDER: Record<'Anaokulu' | 'İlkokul' | 'Ortaokul', number> = { 'Anaokulu': 1, 'İlkokul': 2, 'Ortaokul': 3 };
@@ -37,6 +38,7 @@ function addFixedPeriodsToGrid(grid: Schedule['schedule'], classLevel: 'Anaokulu
 /**
  * Sistematik olarak, çakışmaları ve zaman kısıtlamalarını dikkate alarak ders programını oluşturur.
  * Bu versiyon, ders dağıtım şekillerini (2+2+2 gibi) dikkate alır ve buna göre yerleştirme yapar.
+ * Ayrıca her sınıfın 45 saat zorunluluğunu ve derslerin blok olarak yerleştirilmesini sağlar.
  */
 export async function generateSystematicSchedule(
   mappings: SubjectTeacherMapping[],
@@ -56,6 +58,7 @@ export async function generateSystematicSchedule(
   const classAvailability = new Map<string, Set<string>>();
   const constraintMap = new Map<string, string>();
   const dailyLessonCount = new Map<string, Map<string, Map<string, number>>>();
+  const classSubjectColors = new Map<string, Map<string, string>>();
   
   // Kulüp dersleri için özel slotlar
   const clubSlots = {
@@ -75,6 +78,11 @@ export async function generateSystematicSchedule(
 
   // Sınıf bazında günlük ders saati limitleri
   const classMaxDailyHours = new Map<string, number>();
+
+  // Sınıf bazında ders renkleri
+  allClasses.forEach(classItem => {
+    classSubjectColors.set(classItem.id, new Map<string, string>());
+  });
 
   // Eğitim seviyesi bazında sınıfları grupla
   const classesByLevel = {
@@ -100,11 +108,14 @@ export async function generateSystematicSchedule(
       classAvailability.set(classItem.id, new Set<string>());
       dailyLessonCount.set(classItem.id, new Map<string, Map<string, number>>());
       classWeeklyHours.set(classItem.id, 0); // Sınıf için haftalık ders saati sayacı
-      // Anaokulu için limit yok, diğer sınıflar için 9 ders limiti
+      
+      // Her sınıfın günlük 9 ders limiti var (Anaokulu hariç)
       classMaxDailyHours.set(classItem.id, 
         getEntityLevel(classItem) === 'Anaokulu' ? 45 : 9 // Her sınıfın günlük 9 ders limiti var
       );
-      classTargetHours.set(classItem.id, 45); // Her sınıf için ZORUNLU 45 saat
+      
+      // Her sınıf için ZORUNLU 45 saat hedefi
+      classTargetHours.set(classItem.id, 45);
       
       DAYS.forEach(day => { 
         classScheduleGrids[classItem.id][day] = {};
@@ -131,8 +142,21 @@ export async function generateSystematicSchedule(
   // Öğretmenlerin hedef ders saatlerini hesapla
   mappings.forEach(mapping => {
     const teacherId = mapping.teacherId;
+    const subjectId = mapping.subjectId;
+    const classId = mapping.classId;
     const currentTarget = teacherTargetHours.get(teacherId) || 0;
     teacherTargetHours.set(teacherId, currentTarget + mapping.weeklyHours);
+    
+    // Sınıf-ders renk eşleştirmesi
+    const subject = allSubjects.find(s => s.id === subjectId);
+    if (subject && classSubjectColors.has(classId)) {
+      const colorMap = classSubjectColors.get(classId)!;
+      if (!colorMap.has(subjectId)) {
+        // Ders için tutarlı bir renk oluştur
+        const color = stringToHslColor(subject.name, 85, 90);
+        colorMap.set(subjectId, color);
+      }
+    }
   });
   
   console.log('📊 Öğretmen hedef ders saatleri:');
@@ -197,6 +221,8 @@ export async function generateSystematicSchedule(
   // Görevleri oluştur
   mappings.forEach(mapping => {
     let hoursLeft = mapping.weeklyHours;
+    if (hoursLeft <= 0) return; // Saat yoksa atla
+    
     const classId = mapping.classId;
     const subject = allSubjects.find(s => s.id === mapping.subjectId);
     const isClubSubject = subject && clubSubjectIds.has(subject.id);
@@ -280,7 +306,7 @@ export async function generateSystematicSchedule(
     // Dağıtım şekli varsa ve kullanılabilirse, blok olarak yerleştir
     if (distribution.length > 0 && globalRules.useDistributionPatterns) {
         distribution.forEach((block, index) => {
-            if (block > 0 && hoursLeft >= block) {
+            if (block > 0) {
                 allTasks.push(createTask(block, 'dist', index, index));
                 hoursLeft -= block;
             }
@@ -288,7 +314,7 @@ export async function generateSystematicSchedule(
     }
     
     // Kalan saatleri mümkün olduğunca blok halinde yerleştir
-    if (hoursLeft > 0) {
+    if (hoursLeft > 0 && globalRules.preferBlockScheduling) {
       // Blok büyüklükleri: 2, 3, 1 (öncelik sırasına göre)
       const blockSizes = [2, 3, 1];
       let remainingHours = hoursLeft;
@@ -311,6 +337,15 @@ export async function generateSystematicSchedule(
         
         blockIndex++;
       }
+    } else if (hoursLeft > 0) {
+      // Blok yerleştirme tercih edilmiyorsa, tek saatlik görevler oluştur
+      for (let i = 0; i < hoursLeft; i++) {
+        allTasks.push(createTask(1, 'single', i));
+      }
+    }
+    
+    if (hoursLeft < 0) {
+      console.warn(`⚠️ ${subject?.name || 'Bilinmeyen ders'} için fazla görev oluşturuldu: ${mapping.weeklyHours} saat yerine ${mapping.weeklyHours - hoursLeft} saat`);
     }
   });
   
@@ -405,8 +440,10 @@ export async function generateSystematicSchedule(
   // AŞAMA 3: DİĞER DERSLERİ YERLEŞTİR
   console.log('📚 Diğer dersleri yerleştirme başlatılıyor...');
   
-  // Yerleştirilen görev sayısı
+  // Yerleştirme istatistikleri
   let placedTasksCount = 0;
+  let totalAttempts = 0;
+  const maxAttempts = 1000; // Sonsuz döngüyü önlemek için
   
   // Eğitim seviyesi sıralaması: Anaokulu -> İlkokul -> Ortaokul
   const levelOrder = ['Anaokulu', 'İlkokul', 'Ortaokul'] as const;
@@ -443,6 +480,12 @@ export async function generateSystematicSchedule(
       // Günlere dengeli dağıtım için sayaç
       const dayCount = new Map<string, number>();
       DAYS.forEach(day => dayCount.set(day, 0));
+
+      // Sınıf öğretmeni ID'si
+      const classTeacherId = classItem.classTeacherId;
+      
+      // Sınıf öğretmeni mi kontrol et
+      const isClassTeacher = (taskTeacherId: string) => classTeacherId === taskTeacherId;
       
       // Önce sınıf öğretmeni derslerini yerleştir
       console.log(`👨‍🏫 ${classItem.name} sınıfı için ${classTeacherTasks.length} sınıf öğretmeni dersi yerleştiriliyor...`);
@@ -452,6 +495,9 @@ export async function generateSystematicSchedule(
         
         const { mapping, blockLength, distributionDay } = task;
         const { teacherId, classId, subjectId } = mapping;
+        
+        // Sınıf öğretmeni mi kontrol et
+        const taskIsClassTeacher = isClassTeacher(teacherId);
         
         // Günleri dengeli dağıtım için sırala
         let dayOrder = [...DAYS];
@@ -477,7 +523,7 @@ export async function generateSystematicSchedule(
           // Günlük ders sayısını kontrol et
           const currentDailyCount = dayCount.get(day) || 0;
           
-          // Günlük limit - her sınıf için 9 ders
+          // Günlük limit - her sınıf için 9 ders (Anaokulu hariç)
           const dailyLimit = level === 'Anaokulu' ? 45 : 9;
           
           // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
@@ -488,8 +534,8 @@ export async function generateSystematicSchedule(
           // Periyotları sırala - sabah saatlerini önceliklendir
           let periodOrder = [...PERIODS];
           periodOrder.sort((a, b) => {
-            const aNum = parseInt(a);
-            const bNum = parseInt(b);
+            const aNum = parseInt(a) || 0;
+            const bNum = parseInt(b) || 0;
             if (isNaN(aNum) || isNaN(bNum)) return 0;
             return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
           });
@@ -497,7 +543,7 @@ export async function generateSystematicSchedule(
           // Blok yerleştirme için tüm olası başlangıç noktalarını dene
           for (let i = 0; i <= periodOrder.length - blockLength; i++) {
             let isAvailable = true;
-            const periodsToUse = [];
+            const periodsToUse: string[] = [];
             
             // Blok için uygun ardışık periyotları bul
             for (let j = 0; j < blockLength; j++) {
@@ -510,7 +556,8 @@ export async function generateSystematicSchedule(
               
               // Slot zaten dolu mu kontrol et
               if (classScheduleGrids[classId][day][period] !== undefined && 
-                  classScheduleGrids[classId][day][period] !== null) {
+                  classScheduleGrids[classId][day][period] !== null &&
+                  classScheduleGrids[classId][day][period] !== undefined) {
                 isAvailable = false;
                 break;
               }
@@ -531,7 +578,17 @@ export async function generateSystematicSchedule(
               // Tüm periyotlara yerleştir
               for (const period of periodsToUse) {
                 const slotKey = `${day}-${period}`;
-                classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+                
+                // Ders için renk bilgisi
+                const subjectColor = classSubjectColors.get(classId)?.get(subjectId);
+                
+                classScheduleGrids[classId][day][period] = { 
+                  subjectId, 
+                  teacherId, 
+                  classId,
+                  color: subjectColor
+                };
+                
                 teacherAvailability.get(teacherId)!.add(slotKey);
                 classAvailability.get(classId)!.add(slotKey);
                 
@@ -560,9 +617,10 @@ export async function generateSystematicSchedule(
         // Yerleştirilemedi, tekrar dene
         if (!placed) {
           task.retryCount++;
+          totalAttempts++;
           
           // Yeniden deneme sayısını kontrol et
-          if (task.retryCount < 100) {
+          if (task.retryCount < 100 && totalAttempts < maxAttempts) {
             // Sınıf öğretmeni dersleri için daha fazla deneme
             classTeacherTasks.push(task);
           } else {
@@ -573,6 +631,17 @@ export async function generateSystematicSchedule(
       
       // Son olarak diğer dersleri yerleştir
       console.log(`📚 ${classItem.name} sınıfı için ${otherClassTasks.length} diğer ders yerleştiriliyor...`);
+
+      // Diğer dersleri öncelik sırasına göre sırala
+      otherClassTasks.sort((a, b) => {
+        // Önce önceliğe göre sırala
+        if (a.priority !== b.priority) {
+          return a.priority - b.priority;
+        }
+        
+        // Sonra blok uzunluğuna göre sırala (uzun bloklar önce)
+        return b.blockLength - a.blockLength;
+      });
       
       for (const task of otherClassTasks) {
         if (task.isPlaced) continue;
@@ -580,6 +649,7 @@ export async function generateSystematicSchedule(
         const { mapping, blockLength, distributionDay } = task;
         const { teacherId, classId, subjectId } = mapping;
         const subject = allSubjects.find(s => s.id === subjectId);
+        const taskIsClassTeacher = isClassTeacher(teacherId);
         
         if (!subject) continue;
         
@@ -603,7 +673,7 @@ export async function generateSystematicSchedule(
           // Günlük ders sayısını kontrol et
           const currentDailyCount = dayCount.get(day) || 0;
           
-          // Günlük limit - her sınıf için 9 ders
+          // Günlük limit - her sınıf için 9 ders (Anaokulu hariç)
           const dailyLimit = level === 'Anaokulu' ? 45 : 9;
           
           // Günlük limit aşıldıysa bu günü atla (Anaokulu hariç)
@@ -614,10 +684,10 @@ export async function generateSystematicSchedule(
           // Periyotları sırala - eğitim seviyesine göre
           let periodOrder = [...PERIODS];
           if (level === 'Anaokulu' || level === 'İlkokul') {
-            // Anaokulu ve ilkokul için sabah saatlerini önceliklendir
+            // Anaokulu ve ilkokul için sabah saatlerini önceliklendir (1, 2, 3, 4...)
             periodOrder.sort((a, b) => {
-              const aNum = parseInt(a);
-              const bNum = parseInt(b);
+              const aNum = parseInt(a) || 0;
+              const bNum = parseInt(b) || 0;
               if (isNaN(aNum) || isNaN(bNum)) return 0;
               return aNum - bNum; // Küçük sayılar (sabah saatleri) önce
             });
@@ -629,7 +699,7 @@ export async function generateSystematicSchedule(
           // Blok yerleştirme için tüm olası başlangıç noktalarını dene
           for (let i = 0; i <= periodOrder.length - blockLength; i++) {
             let isAvailable = true;
-            const periodsToUse = [];
+            const periodsToUse: string[] = [];
             
             // Blok için uygun ardışık periyotları bul
             for (let j = 0; j < blockLength; j++) {
@@ -642,7 +712,8 @@ export async function generateSystematicSchedule(
               
               // Slot zaten dolu mu kontrol et
               if (classScheduleGrids[classId][day][period] !== undefined && 
-                  classScheduleGrids[classId][day][period] !== null) {
+                  classScheduleGrids[classId][day][period] !== null &&
+                  classScheduleGrids[classId][day][period] !== undefined) {
                 isAvailable = false;
                 break;
               }
@@ -663,7 +734,17 @@ export async function generateSystematicSchedule(
               // Tüm periyotlara yerleştir
               for (const period of periodsToUse) {
                 const slotKey = `${day}-${period}`;
-                classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+                
+                // Ders için renk bilgisi
+                const subjectColor = classSubjectColors.get(classId)?.get(subjectId);
+                
+                classScheduleGrids[classId][day][period] = { 
+                  subjectId, 
+                  teacherId, 
+                  classId,
+                  color: subjectColor
+                };
+                
                 teacherAvailability.get(teacherId)!.add(slotKey);
                 classAvailability.get(classId)!.add(slotKey);
                 
@@ -692,9 +773,10 @@ export async function generateSystematicSchedule(
         // Yerleştirilemedi, tekrar dene
         if (!placed) {
           task.retryCount++;
+          totalAttempts++;
           
           // Yeniden deneme sayısını kontrol et
-          if (task.retryCount < 50) {
+          if (task.retryCount < 50 && totalAttempts < maxAttempts) {
             // Birkaç kez daha dene
             otherClassTasks.push(task);
           }
@@ -721,7 +803,12 @@ export async function generateSystematicSchedule(
               teacherSchedules[slot.teacherId] = {}; 
               DAYS.forEach(d => teacherSchedules[slot.teacherId][d] = {});
           }
-          teacherSchedules[slot.teacherId][day][period] = { classId, subjectId: slot.subjectId };
+          teacherSchedules[slot.teacherId][day][period] = { 
+            classId: slot.classId, 
+            subjectId: slot.subjectId, 
+            isFixed: false,
+            color: slot.color
+          };
         } 
       }); 
     }); 
