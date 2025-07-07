@@ -418,7 +418,15 @@ export async function generateSystematicSchedule(
       }
       
       // Kulüp dersini yerleştir
-      classScheduleGrids[classId][day][period] = { subjectId, teacherId, classId };
+      // Ders için renk bilgisi
+      const subjectColor = classSubjectColors.get(classId)?.get(subjectId);
+      
+      classScheduleGrids[classId][day][period] = { 
+        subjectId, 
+        teacherId, 
+        classId,
+        color: subjectColor
+      };
       teacherAvailability.get(teacherId)!.add(slotKey);
       classAvailability.get(classId)!.add(slotKey);
       
