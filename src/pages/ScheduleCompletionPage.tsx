@@ -458,6 +458,9 @@ const ScheduleCompletionPage = () => {
   const handleSaveAll = async () => {
     setIsSaving(true);
     try {
+        // Kullanıcıya bilgi ver
+        info("Kaydediliyor...", "Programlar kaydediliyor, lütfen bekleyin.");
+        
         const batch = writeBatch(db);
         for (const schedule of workingSchedules) {
             const { isNew, ...scheduleData } = schedule as any;
@@ -471,10 +474,10 @@ const ScheduleCompletionPage = () => {
             }
         }
         await batch.commit();
-        success("Kaydedildi!", "Tüm değişiklikler başarıyla kaydedildi.");
+        success("✅ Kaydedildi!", "Tüm programlar başarıyla kaydedildi.");
         navigate('/all-schedules');
     } catch(e) {
-        error("Kayıt Hatası", "Değişiklikler kaydedilirken bir hata oluştu.");
+        error("❌ Kayıt Hatası", "Programlar kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.");
         console.error(e);
     } finally {
       setIsSaving(false);

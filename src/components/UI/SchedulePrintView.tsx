@@ -240,6 +240,7 @@ const SchedulePrintView: React.FC<SchedulePrintViewProps> = ({
                         border: '1px solid #000000',
                         padding: '8px 4px',
                         textAlign: 'center',
+                        backgroundColor: slot?.color || '#ffffff'
                         backgroundColor: periodIndex % 2 === 0 ? '#ffffff' : '#f8f9fa'
                       }}>
                         {slotInfo ? (

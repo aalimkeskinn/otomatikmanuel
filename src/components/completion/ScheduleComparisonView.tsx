@@ -84,7 +84,7 @@ const SingleScheduleGrid: React.FC<{
                       const isAvailable = availableSlots.has(slotKey);
                       const conflict = conflictReasons.get(slotKey);
                       
-                      let bgColor = 'bg-white';
+                      let bgColor = 'bg-white hover:bg-gray-50';
                       let hoverBg = 'hover:bg-gray-50';
                       let cursor = 'cursor-pointer';
                       let titleText = conflict?.join('\n') || '';
@@ -94,7 +94,7 @@ const SingleScheduleGrid: React.FC<{
 
                       if (isAvailable) {
                         bgColor = 'bg-green-100';
-                        hoverBg = 'hover:bg-green-200';
+                        hoverBg = 'hover:bg-green-200 hover:scale-105';
                         titleText = 'Bu boş saate dersi ata';
                         content = (
                           <div className="flex items-center justify-center">
@@ -103,7 +103,7 @@ const SingleScheduleGrid: React.FC<{
                         );
                       } else if (slot) {
                         bgColor = 'bg-red-50';
-                        hoverBg = 'hover:bg-red-100';
+                        hoverBg = 'hover:bg-red-100 hover:scale-105';
                         const subject = allSubjects.find(s => s.id === slot.subjectId);
                         titleText = `Dolu: ${subject?.name || 'Bilinmeyen Ders'}. Detayları ve takas seçeneğini görmek için tıkla.`;
                         content = (

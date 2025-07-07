@@ -53,6 +53,7 @@ export interface ScheduleSlot {
   classId?: string;
   teacherId?: string;
   isFixed?: boolean;
+  color?: string;
 }
 
 export interface Schedule {

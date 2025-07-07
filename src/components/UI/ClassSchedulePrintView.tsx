@@ -137,7 +137,12 @@ const ClassSchedulePrintView: React.FC<ClassSchedulePrintViewProps> = ({
                   const subject = slot.subject;
 
                   return (
-                    <td key={`${day}-${period}`} style={{ border: '1px solid #000000', padding: '8px 4px', textAlign: 'center' }}>
+                    <td key={`${day}-${period}`} style={{ 
+                      border: '1px solid #000000',
+                      padding: '8px 4px',
+                      textAlign: 'center',
+                      backgroundColor: slot?.subject?.color || '#ffffff'
+                    }}>
                       {teacher ? (
                         <div>
                           <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>

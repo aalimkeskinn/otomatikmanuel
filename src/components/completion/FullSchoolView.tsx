@@ -277,14 +277,19 @@ const FullSchoolView: React.FC<FullSchoolViewProps> = ({ workingSchedules, setWo
                                   const teacher = slot?.teacherId ? teachers.find(t => t.id === slot.teacherId) : null;
                                   const subject = slot?.subjectId ? subjects.find(s => s.id === slot?.subjectId) : null;
                                   const cellData: CellData = { classId: c.id, day: day, period: tp.period, slot };
-                                  const isDragging = draggingCell?.classId === c.id && draggingCell?.day === day && draggingCell?.period === tp.period;
+                                  const isDragging = draggingCell?.classId === c.id && 
+                                                    draggingCell?.day === day && 
+                                                    draggingCell?.period === tp.period;
                                   
-                                  const cellStyle: React.CSSProperties = {};
+                                  const cellStyle: React.CSSProperties = {
+                                    transition: 'all 0.2s ease'
+                                  };
                                   let title = `${c.name} - ${day} ${tp.period}. Ders`;
                                   let content: React.ReactNode = <div className="h-4"> </div>;
 
                                   if (teacher && subject) {
-                                    cellStyle.backgroundColor = stringToHslColor(teacher.branch, 65, 88);
+                                    // Renk bilgisi varsa kullan, yoksa öğretmen branşına göre oluştur
+                                    cellStyle.backgroundColor = slot.color || stringToHslColor(subject.name, 85, 90);
                                     cellStyle.cursor = 'grab';
                                     title = `${teacher.name} - ${subject.name}`;
                                     content = (

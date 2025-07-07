@@ -41,6 +41,12 @@ export function analyzeUnassignedLesson(
   const availableSlots = new Set<string>();
   const conflictReasons = new Map<string, string[]>();
 
+  // Öğretmen ve sınıf programlarını kontrol et
+  if (!teacherSchedule || !classSchedule) {
+    console.error("Öğretmen veya sınıf programı bulunamadı");
+    return { availableSlots, conflictReasons };
+  }
+
   DAYS.forEach(day => {
     PERIODS.forEach(period => {
       const slotKey = `${day}-${period}`;
@@ -49,13 +55,20 @@ export function analyzeUnassignedLesson(
       const teacherSlot = teacherSchedule[day]?.[period];
       if (teacherSlot) {
         const conflictClass = allClasses.find(c => c.id === teacherSlot.classId);
-        const conflictSubject = allSubjects.find(s => s.id === teacherSlot.subjectId);
-        reasons.push(`Öğretmen, ${conflictClass?.name || ''} sınıfına ${conflictSubject?.name || 'başka bir'} dersi veriyor.`);
+        
+        if (teacherSlot.isFixed) {
+          reasons.push(`Öğretmen için sabit zaman dilimi: ${teacherSlot.subjectId || 'Sabit Periyot'}`);
+        } else {
+          const conflictSubject = allSubjects.find(s => s.id === teacherSlot.subjectId);
+          reasons.push(`Öğretmen, ${conflictClass?.name || ''} sınıfına ${conflictSubject?.name || 'başka bir'} dersi veriyor.`);
+        }
       }
 
       const classSlot = classSchedule[day]?.[period];
       if (classSlot) {
-        if (classSlot.teacherId !== lesson.teacherId) {
+        if (classSlot.isFixed) {
+          reasons.push(`Sınıf için sabit zaman dilimi: ${classSlot.subjectId || 'Sabit Periyot'}`);
+        } else if (classSlot.teacherId !== lesson.teacherId) {
             const conflictTeacher = allTeachers.find(t => t.id === classSlot.teacherId);
             reasons.push(`Sınıf, ${conflictTeacher?.name || ''} öğretmeninden ders alıyor.`);
         }
@@ -64,11 +77,15 @@ export function analyzeUnassignedLesson(
       const teacherConstraint = constraints.find(c => c.entityType === 'teacher' && c.entityId === lesson.teacherId && c.day === day && c.period === period);
       if (teacherConstraint?.constraintType === 'unavailable') {
         reasons.push(`Öğretmen kısıtlaması: Müsait değil (${teacherConstraint.reason || 'belirtilmemiş'}).`);
+      } else if (teacherConstraint?.constraintType === 'restricted') {
+        reasons.push(`Öğretmen kısıtlaması: Kısıtlı (${teacherConstraint.reason || 'belirtilmemiş'}).`);
       }
 
       const classConstraint = constraints.find(c => c.entityType === 'class' && c.entityId === lesson.classId && c.day === day && c.period === period);
       if (classConstraint?.constraintType === 'unavailable') {
         reasons.push(`Sınıf kısıtlaması: Müsait değil (${classConstraint.reason || 'belirtilmemiş'}).`);
+      } else if (classConstraint?.constraintType === 'restricted') {
+        reasons.push(`Sınıf kısıtlaması: Kısıtlı (${classConstraint.reason || 'belirtilmemiş'}).`);
       }
       
       if (reasons.length === 0) {
